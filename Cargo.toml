@@ -4,4 +4,5 @@ members = [
     "shared",
     "client",
     "server",
+    "proc_macros"
 ]
