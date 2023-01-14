@@ -1,4 +1,4 @@
-use nalgebra_glm::Vec3;
+use glam::{i32::IVec3, Vec3};
 
 #[repr(i8)]
 pub enum AxisDirection {
@@ -66,14 +66,14 @@ impl Direction {
         }
     }
 
-    pub fn offset(&self) -> Vec3 {
+    pub fn offset(&self) -> IVec3 {
         match self {
-            Self::North => Vec3::new(0.0, 0.0, -1.0),
-            Self::South => Vec3::new(0.0, 0.0, 1.0),
-            Self::East => Vec3::new(1.0, 0.0, 0.0),
-            Self::West => Vec3::new(-1.0, 0.0, 0.0),
-            Self::Up => Vec3::new(0.0, 1.0, 0.0),
-            Self::Down => Vec3::new(0.0, -1.0, 0.0),
+            Self::North => IVec3::NEG_Z,
+            Self::South => IVec3::Z,
+            Self::East => IVec3::X,
+            Self::West => -IVec3::NEG_X,
+            Self::Up => IVec3::Y,
+            Self::Down => -IVec3::NEG_Y,
         }
     }
 
@@ -81,10 +81,13 @@ impl Direction {
         let mut result = Self::North;
         let mut similarity = f32::MIN;
 
-        for direction in Self::LOOKUP { //Do this in a loop because iterators can't be sorted and collecting the values in a vec would be dumb
+        for direction in Self::LOOKUP {
+            //Do this in a loop because iterators can't be sorted and collecting the values in a vec would be dumb
             let offset = direction.offset();
-            let s = vec.x * offset.x + vec.y * offset.y + vec.z * offset.z;
-            
+    
+
+            let s = vec.x * offset.x as f32 + vec.y * offset.y as f32 + vec.z * offset.z as f32;
+
             if s > similarity {
                 result = direction;
                 similarity = s;
