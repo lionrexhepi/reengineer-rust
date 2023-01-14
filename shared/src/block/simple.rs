@@ -1,4 +1,4 @@
-use super::state::{State, BlockHandler};
+use super::state::{BlockHandler, State};
 
 pub struct AirState;
 
@@ -11,7 +11,6 @@ impl BlockHandler for AirState {
         true
     }
 }
-
 
 pub struct GrassState {
     snowy: bool,

@@ -7,7 +7,6 @@ pub fn count_ids(_attr: TokenStream, target: TokenStream) -> TokenStream {
     let target_enum = syn::parse::<ItemEnum>(target).unwrap();
     let name = target_enum.clone().ident;
     let fields = target_enum
-        .clone()
         .variants
         .iter()
         .map(|f| f.ident.clone())
