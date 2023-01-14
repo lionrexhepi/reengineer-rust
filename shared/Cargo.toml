@@ -4,4 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+nalgebra-glm = "0.17.0"
 proc_macros = { path = "../proc_macros" }
+serde = "1.0.152"
+serde_derive = "1.0.152"
