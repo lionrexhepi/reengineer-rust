@@ -1,9 +1,12 @@
-use std::ops::{Range, Mul};
+use std::ops::{Mul, Range};
+
+use glam::{IVec3, Vec3};
 
 use super::direction::{self, Direction};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct BlockPos { // A Block position serializable to a 64-bit large space
+pub struct BlockPos {
+    // A Block position serializable to a 64-bit large space
     x: i32,
     y: i32,
     z: i32,
@@ -77,9 +80,67 @@ impl BlockPos {
         }
     }
 
-    pub fn offset(&self, direction: Direction, offset: i32) {
-        let offset = direction.offset() * offset;
+    pub fn offset_up(&self) -> Self {
+        Self {
+            y: self.y + 1,
+            ..*self
+        }
+    }
 
+    pub fn offset_down(&self) -> Self {
+        Self {
+            y: self.y - 1,
+            ..*self
+        }
+    }
+
+    pub fn offset_north(&self) -> Self {
+        Self {
+            z: self.z - 1,
+            ..*self
+        }
+    }
+
+    pub fn offset_south(&self) -> Self {
+        Self {
+            z: self.z + 1,
+            ..*self
+        }
+    }
+
+    pub fn offset_west(&self) -> Self {
+        Self {
+            x: self.x - 1,
+            ..*self
+        }
+    }
+
+    pub fn offset_east(&self) -> Self {
+        Self {
+            x: self.x + 1,
+            ..*self
+        }
+    }
+    
+}
+
+impl From<BlockPos> for IVec3 {
+    fn from(value: BlockPos) -> Self {
+        Self {
+            x: value.x(),
+            y: value.y(),
+            z: value.z()
+        }
+    }
+}
+
+impl From<BlockPos> for Vec3 {
+    fn from(value: BlockPos) -> Self {
+        Self {
+            x: value.x() as f32,
+            y: value.y() as f32,
+            z: value.z() as f32
+        }
     }
 }
 
