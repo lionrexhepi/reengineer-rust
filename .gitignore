@@ -1,6 +1,5 @@
 debug/
 target/
-server/Cargo.lock
-client/Cargo.lock
+**/Cargo.lock
 **/*.rs.bk
 *.pdb
