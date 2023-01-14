@@ -1,8 +1,7 @@
-use std::ops::{Mul, Range};
+use std::ops::Range;
 
 use glam::{IVec3, Vec3};
 
-use super::direction::{self, Direction};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct BlockPos {
