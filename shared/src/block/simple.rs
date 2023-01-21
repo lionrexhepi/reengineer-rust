@@ -1,3 +1,5 @@
+use crate::util::block_pos::BlockPos;
+
 use super::state::{BlockHandler, State};
 
 pub struct AirState;
@@ -7,7 +9,7 @@ impl State for AirState {
 }
 
 impl BlockHandler for AirState {
-    fn is_replaceable(&self, _pos: (i32, i32, i32)) -> bool {
+    fn is_replaceable(&self, _pos: BlockPos) -> bool {
         true
     }
 }
@@ -21,11 +23,7 @@ impl GrassState {
     pub const SNOWY: Self = Self { snowy: true };
 }
 
-impl BlockHandler for GrassState {
-    fn is_replaceable(&self, _pos: (i32, i32, i32)) -> bool {
-        false
-    }
-}
+impl BlockHandler for GrassState {}
 
 impl State for GrassState {
     fn id(&self) -> u8 {

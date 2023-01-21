@@ -1,5 +1,7 @@
 use proc_macros::count_ids;
 
+use crate::util::block_pos::BlockPos;
+
 use super::simple::*;
 
 #[count_ids]
@@ -18,14 +20,16 @@ impl Block {
     }
 }
 
-impl Block {
-    pub fn is_replaceable(&self, pos: (i32, i32, i32)) -> bool {
+impl BlockHandler for Block {
+     fn is_replaceable(&self, pos: BlockPos) -> bool {
         self.inner_handler().is_replaceable(pos)
     }
 }
 
 pub trait BlockHandler {
-    fn is_replaceable(&self, pos: (i32, i32, i32)) -> bool;
+    fn is_replaceable(&self, pos: BlockPos) -> bool {
+        false
+    }
 }
 
 pub trait State {
