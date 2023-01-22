@@ -1,10 +1,10 @@
 pub mod block;
 pub mod util;
+pub mod dimension;
 
 #[cfg(test)]
 mod test {
-    use crate::util::block_pos::BlockPos;
-
+    use crate::util::{ pos::BlockPos };
 
     #[test]
     pub fn test_block_pos() {

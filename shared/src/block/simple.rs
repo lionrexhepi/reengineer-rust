@@ -1,4 +1,4 @@
-use crate::util::block_pos::BlockPos;
+use crate::util::pos::BlockPos;
 
 use super::state::{BlockHandler, State};
 

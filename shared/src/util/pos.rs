@@ -1,7 +1,21 @@
 use std::ops::Range;
 
-use glam::{IVec3, Vec3};
+use glam::{ IVec3, Vec3 };
 
+pub struct ChunkPos {
+    x: i32,
+    z: i32,
+}
+
+impl ChunkPos {
+    pub fn as_long(&self) -> u64 { //mostly used as a hash map key
+        ((self.x as u64) << 32) | (self.z as u64)
+    }
+
+    pub fn new(x: i32, z: i32) -> Self {
+        Self { x, z }
+    }
+}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct BlockPos {
@@ -35,9 +49,9 @@ impl BlockPos {
     pub const VALID_Z: Range<i32> = -Self::MAX_Z_DISTANCE..Self::MAX_Z_DISTANCE;
 
     pub fn new(x: i32, y: i32, z: i32) -> BlockPos {
-        assert!(Self::VALID_X.contains(&x));
-        assert!(Self::VALID_Y.contains(&y));
-        assert!(Self::VALID_Z.contains(&z));
+        debug_assert!(Self::VALID_X.contains(&x));
+        debug_assert!(Self::VALID_Y.contains(&y));
+        debug_assert!(Self::VALID_Z.contains(&z));
 
         Self { x, y, z }
     }
@@ -58,9 +72,9 @@ impl BlockPos {
         let x = self.x as u64;
         let y = self.y as u64;
         let z = self.z as u64;
-        ((x & Self::X_MASK) << Self::X_SHIFT)
-            | ((y & Self::Y_MASK) << Self::Y_SHIFT)
-            | ((z & Self::Z_MASK) << Self::Z_SHIFT)
+        ((x & Self::X_MASK) << Self::X_SHIFT) |
+            ((y & Self::Y_MASK) << Self::Y_SHIFT) |
+            ((z & Self::Z_MASK) << Self::Z_SHIFT)
     }
 
     pub fn from_long(long: u64) -> Self {
@@ -120,7 +134,10 @@ impl BlockPos {
             ..*self
         }
     }
-    
+
+    pub fn get_chunk(&self) -> ChunkPos {
+        ChunkPos::new(self.x >> 4, self.z >> 4)
+    }
 }
 
 impl From<BlockPos> for IVec3 {
@@ -128,7 +145,7 @@ impl From<BlockPos> for IVec3 {
         Self {
             x: value.x(),
             y: value.y(),
-            z: value.z()
+            z: value.z(),
         }
     }
 }
@@ -138,16 +155,13 @@ impl From<BlockPos> for Vec3 {
         Self {
             x: value.x() as f32,
             y: value.y() as f32,
-            z: value.z() as f32
+            z: value.z() as f32,
         }
     }
 }
 
 impl serde::Serialize for BlockPos {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
         serializer.serialize_u64(self.as_long())
     }
 }

@@ -1,6 +1,6 @@
 use proc_macros::count_ids;
 
-use crate::util::block_pos::BlockPos;
+use crate::util::pos::BlockPos;
 
 use super::simple::*;
 
