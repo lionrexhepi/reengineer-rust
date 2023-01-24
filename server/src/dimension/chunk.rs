@@ -21,10 +21,7 @@ pub struct ServerChunkStorage {
 impl ServerChunkStorage {
     pub const EMPTY_CHUNK: Chunk = Chunk {};
 
-    fn cache_chunk(&mut self, id: u64, chunk: Chunk) -> &Chunk {
-        self.chunk_map.insert(id, chunk);
-        self.chunk_map.get(&id).unwrap()
-    }
+
 }
 
 impl ChunkStorage for ServerChunkStorage {
@@ -34,35 +31,22 @@ impl ChunkStorage for ServerChunkStorage {
 
     fn get_chunk(&mut self, pos: &ChunkPos) -> &Chunk {
         let id = pos.as_long();
-        {
-            if self.chunk_map.contains_key(&id) {
-                return self.chunk_map.get(&id).unwrap();
-            }
-        }
-
-        {
-            match self.file_loader.get_chunk(pos) {
-                Ok(chunk) => {
-                    return self.cache_chunk(id, chunk);
-                }
-                Err(e) => {
-                    let _ = match e {
-                        ChunkProviderError::ChunkNotGeneratedError => 0,
-                        _ => {
-                            return &Self::EMPTY_CHUNK;
+        self.chunk_map.entry(id).or_insert(match self.file_loader.get_chunk(pos) {
+            Ok(chunk) => { chunk }
+            Err(e) => {
+                match e {
+                    ChunkProviderError::ChunkNotGeneratedError =>
+                        match self.generator.get_chunk(pos) {
+                            Ok(chunk) => chunk,
+                            Err(err_type) => {
+                                error!("Couldn't generate chunk! Error of type {:#?}", err_type);
+                                debug_assert!(false);
+                                return &Self::EMPTY_CHUNK;
+                            }
                         }
-                    };
+                    _ => { Self::EMPTY_CHUNK }
                 }
             }
-        }
-
-        match self.generator.get_chunk(pos) {
-            Ok(chunk) => { self.cache_chunk(id, chunk) }
-            Err(err_type) => {
-                error!("Couldn't generate chunk! Error of type {:#?}", err_type);
-                debug_assert!(false);
-                &Self::EMPTY_CHUNK
-            }
-        }
+        })
     }
 }
