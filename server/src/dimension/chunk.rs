@@ -14,7 +14,7 @@ impl ChunkProvider for DiskChunkLoader {
 
 pub struct ServerChunkStorage {
     file_loader: DiskChunkLoader,
-    generator: Box<dyn ChunkGenerator>,
+    generator: dyn ChunkGenerator,
     chunk_map: MetroHashMap<u64, Chunk>,
 }
 
