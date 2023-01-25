@@ -15,6 +15,14 @@ impl ChunkPos {
     pub fn new(x: i32, z: i32) -> Self {
         Self { x, z }
     }
+
+    pub fn x(&self) -> i32 {
+        self.x
+    }
+
+    pub fn z(&self) -> i32 {
+        self.z
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
