@@ -11,7 +11,7 @@ pub enum ChunkProviderError {
 }
 
 pub trait ChunkProvider {
-    fn get_chunk(&self, pos: &ChunkPos) -> Result<Chunk, ChunkProviderError>;
+    fn get_chunk(&self, pos: &ChunkPos) -> Result<&Chunk, ChunkProviderError>;
 }
 
 pub trait ChunkStorage {
