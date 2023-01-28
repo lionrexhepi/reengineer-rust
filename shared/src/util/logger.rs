@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::time::SystemTime;
 
-use chrono::{ TimeZone, DateTime, Utc, Local };
+use chrono::{  DateTime, Local };
 use log::info;
 use log4rs::Config;
 use log4rs::append::console::ConsoleAppender;
@@ -9,7 +9,6 @@ use log4rs::append::console::ConsoleAppender;
 use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::append::rolling_file::policy::Policy;
 
-use log4rs::append::rolling_file::policy::compound::roll::delete;
 use log4rs::config::Appender;
 use log4rs::config::Logger;
 use log4rs::config::Root;
