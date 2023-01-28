@@ -28,15 +28,14 @@ pub struct ServerChunkStorage {
     chunk_map: MetroHashMap<u64, Chunk>,
 }
 
-impl ServerChunkStorage {
-    pub const EMPTY_CHUNK: Chunk = Chunk {};
+static EMPTY_CHUNK: Chunk = Chunk::empty();
 
+impl ServerChunkStorage {
     /// the error bool says whether you should try to generate the chunk first
     fn try_from_disk(&self, pos: &ChunkPos) -> Result<&Chunk, bool> {
         match self.file_loader.get_chunk(pos) {
             Ok(chunk) => Ok(chunk),
-            Err(e) =>
-                Err(matches!(e, ChunkProviderError::ChunkNotGeneratedError)),
+            Err(e) => Err(matches!(e, ChunkProviderError::ChunkNotGeneratedError)),
         }
     }
 
@@ -72,15 +71,14 @@ impl ChunkStorage for ServerChunkStorage {
                 if e {
                     //Double it and give it to the next person
                 } else {
-                    return &Self::EMPTY_CHUNK;
+                    return &EMPTY_CHUNK;
                 }
             }
-        };
+        }
 
         match self.try_generate(pos) {
             Ok(chunk) => chunk,
-            Err(_) => &Self::EMPTY_CHUNK
+            Err(_) => &EMPTY_CHUNK,
         }
-
     }
 }
