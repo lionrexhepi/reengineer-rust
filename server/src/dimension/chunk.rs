@@ -2,6 +2,7 @@ use std::{ path::Path };
 
 use log::error;
 use metrohash::MetroHashMap;
+use once_cell::sync::Lazy;
 use shared::{ dimension::chunk::*, util::pos::ChunkPos };
 
 pub struct DiskChunkLoader {
@@ -16,7 +17,7 @@ impl DiskChunkLoader {
 
 impl ChunkProvider for DiskChunkLoader {
     fn get_chunk(&self, _pos: &shared::util::pos::ChunkPos) -> Result<&Chunk, ChunkProviderError> {
-        todo!()
+        Err(ChunkProviderError::ChunkNotGeneratedError)
     }
 }
 
@@ -28,7 +29,7 @@ pub struct ServerChunkStorage {
     chunk_map: MetroHashMap<u64, Chunk>,
 }
 
-static EMPTY_CHUNK: Chunk = Chunk::empty();
+static EMPTY_CHUNK: Lazy<Chunk> = Lazy::new(Chunk::empty);
 
 impl ServerChunkStorage {
     /// the error bool says whether you should try to generate the chunk first

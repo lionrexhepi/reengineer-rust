@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.68"
+bitter = "0.6.1"
 chrono = "0.4.23"
 glam = "0.22.0"
 log = "0.4.17"
