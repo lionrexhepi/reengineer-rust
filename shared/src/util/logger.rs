@@ -24,7 +24,7 @@ struct OnStartupPolicy {}
 
 impl Policy for OnStartupPolicy {
     fn process(&self, log: &mut log4rs::append::rolling_file::LogFile) -> anyhow::Result<()> {
-        if let None = Lazy::get(&IS_INIT) {
+        if Lazy::get(&IS_INIT).is_none() {
             let _ = *IS_INIT;
 
             let meta = std::fs::metadata(log.path());
@@ -43,13 +43,13 @@ impl Policy for OnStartupPolicy {
                     Err(_) => None,
                 }
             )
-                .unwrap_or(SystemTime::now())
+                .unwrap_or_else(SystemTime::now)
                 .into();
 
             let filename = log
                 .path()
                 .parent()
-                .unwrap_or(Path::new("/"))
+                .unwrap_or_else(|| Path::new("/"))
                 .join(Path::new(&timestamp.format("%d:%m:%Y-%T.log").to_string()));
 
             std::fs::copy(log.path(), filename)?;

@@ -27,7 +27,7 @@ impl BlockHandler for Block {
 }
 
 pub trait BlockHandler {
-    fn is_replaceable(&self, pos: BlockPos) -> bool {
+    fn is_replaceable(&self, _pos: BlockPos) -> bool {
         false
     }
 }
