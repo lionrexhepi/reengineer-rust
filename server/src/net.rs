@@ -1,61 +1,91 @@
-use std::{ sync::mpsc::{ Receiver, Sender, channel, SendError }, thread::{ self, JoinHandle } };
+use core::panic;
 
-use concurrent_queue::ConcurrentQueue;
-use log::info;
-use shared::net::{ Packet, NetworkHandler };
+use log::error;
+use metrohash::MetroHashMap;
+use shared::net::{ PacketData, PacketDirection, Packet, NetworkHandler, ClientId };
+use tokio::{
+    spawn,
+    sync::mpsc::{ unbounded_channel, UnboundedSender, UnboundedReceiver },
+    task::JoinHandle,
+    net::{ TcpListener },
+    io::{ AsyncReadExt, BufWriter },
+};
 
 pub struct ServerNetworkHandler {
-    outgoing_sender: Sender<Packet>,
-    incoming_receiver: Receiver<Packet>,
-    send_thread: Option<JoinHandle<()>>,
-    receive_thread: Option<JoinHandle<()>>,
+    outgoing_sender: UnboundedSender<Packet>,
+    incoming_receiver: UnboundedReceiver<Packet>,
+    server_thread: JoinHandle<()>,
 }
 
 impl ServerNetworkHandler {
-    pub fn init() -> Self {
-        let (s1, r1) = channel();
-        let (s2, r2) = channel();
+    pub async fn init() -> Self {
+        let (send_out, mut receive_out) = unbounded_channel::<Packet>();
+        let (send_in, receive_in) = unbounded_channel();
 
-        (Self {
-            incoming_receiver: r2,
-            outgoing_sender: s1,
-            send_thread: None,
-            receive_thread: None,
-        }).init_thread(s2, r1)
-    }
+        let listener = TcpListener::bind("127.0.0.1:19354").await.unwrap();
 
-    fn init_thread(mut self, sx: Sender<Packet>, rx: Receiver<Packet>) -> Self {
-        self.send_thread = Some(
-            thread::spawn(move || {
-                loop {
-                    let outgoing = rx.recv();
+        let handle_thread = spawn(async move {
+            let mut clients = MetroHashMap::default();
 
-                    if outgoing.is_err() {
-                        break;
-                    } else {
-                        todo!(); //Send packets
+            'main_loop: loop {
+                let client = listener.accept().await;
+                if let Ok((stream, _)) = client {
+                    clients.insert(ClientId::new(), stream);
+                }
+
+                for (id, stream) in clients.iter_mut() {
+                    let mut buffer = Vec::new();
+                    if let Err(e) = stream.read_to_end(&mut buffer).await {
+                        error!("Error loading Packet data: {}", e);
+                    }
+                    let packet_data = PacketData::from_bytes(&buffer);
+
+                    match packet_data {
+                        Ok(packet_data) => {
+                            let packet = Packet {
+                                data: packet_data,
+                                direction: PacketDirection::Clientbound(id.clone()),
+                            };
+
+                            if send_in.send(packet).is_err() {
+                                break 'main_loop;
+                            }
+                        }
+
+                        Err(e) => error!("Failed to parse Packet: {}", e),
                     }
                 }
-            })
-        );
 
-        self.receive_thread = Some(
-            thread::spawn(move || {
-                loop {
-                    let incoming = Packet {
-                        direction: shared::net::PacketDirection::Serverbound,
-                        data: shared::net::PacketData::Ping,
+                while let Ok(packet) = receive_out.try_recv() {
+                    let target = match packet.direction {
+                        PacketDirection::Serverbound(_) =>
+                            panic!(
+                                "Packets sent by the server are NOT supposed to be serverbound. Packet in question: {:?}",
+                                packet
+                            ),
+                        PacketDirection::Clientbound(target) => target,
                     };
 
-                    if sx.send(incoming).is_err() {
-                        
-                        break;
+                    if let Some(stream) = clients.get_mut(&target) {
+                        let writer = BufWriter::new(&mut *stream);
+                        if let Err(e) = packet.data.write_to_buffer(writer).await {
+                            error!("Failed to serialize packet: {}", e);
+                        }
+                    } else {
+                        error!(
+                            "Client with ID {:?} not found. They might have disconnected already.",
+                            target
+                        );
                     }
                 }
-            })
-        );
+            }
+        });
 
-        self
+        Self {
+            server_thread: handle_thread,
+            outgoing_sender: send_out,
+            incoming_receiver: receive_in,
+        }
     }
 }
 
@@ -67,7 +97,17 @@ impl NetworkHandler for ServerNetworkHandler {
         }
     }
 
-    fn retrieve_incoming(&self) -> Vec<Packet> {
-        self.incoming_receiver.try_iter().collect()
+    fn retrieve_incoming(&mut self) -> Vec<Packet> {
+        let mut result = Vec::new();
+
+        while let Ok(packet) = self.incoming_receiver.try_recv() {
+            result.push(packet);
+        }
+
+        result
+    }
+
+    fn close_all(self) {
+        self.server_thread.abort();
     }
 }
