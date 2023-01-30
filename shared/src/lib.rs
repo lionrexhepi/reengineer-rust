@@ -1,6 +1,7 @@
 pub mod block;
 pub mod util;
 pub mod dimension;
+pub mod net;
 
 #[cfg(test)]
 mod test {

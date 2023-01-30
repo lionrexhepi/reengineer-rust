@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use proc_macros::count_ids;
 
 use crate::util::pos::BlockPos;
@@ -5,6 +7,7 @@ use crate::util::pos::BlockPos;
 use super::simple::*;
 
 #[count_ids]
+#[derive(Debug)]
 pub enum Block {
     Air(AirState),
     Grass(GrassState),
@@ -32,7 +35,7 @@ pub trait BlockHandler {
     }
 }
 
-pub trait State {
+pub trait State:Debug {
     fn id(&self) -> u8 {
         0
     }

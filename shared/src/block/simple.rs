@@ -2,6 +2,7 @@ use crate::util::pos::BlockPos;
 
 use super::state::{BlockHandler, State};
 
+#[derive(Debug)]
 pub struct AirState;
 
 impl State for AirState {
@@ -14,6 +15,7 @@ impl BlockHandler for AirState {
     }
 }
 
+#[derive(Debug)]
 pub struct GrassState {
     snowy: bool,
 }

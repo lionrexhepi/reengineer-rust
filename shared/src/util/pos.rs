@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use glam::{ IVec3, Vec3 };
 
+#[derive(Debug)]
 pub struct ChunkPos {
     x: i32,
     z: i32,

@@ -6,6 +6,7 @@ use crate::{
     block::{ state::{ Block, State }, simple::AirState },
 };
 
+#[derive(Debug)]
 pub struct SubChunk {
     data: [u16; Self::BLOCK_COUNT],
     y_base: u8,
@@ -48,6 +49,7 @@ impl SubChunk {
     }
 }
 
+#[derive(Debug)]
 pub struct Chunk {
     non_air_sub_chunks: MetroHashMap<u8, SubChunk>,
 }
