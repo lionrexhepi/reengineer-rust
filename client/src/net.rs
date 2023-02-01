@@ -1,14 +1,13 @@
-use core::panic;
+use core::{ panic };
 
 use log::error;
-use metrohash::MetroHashMap;
-use shared::net::{ PacketData, Packet, NetworkHandler, ClientId };
+use shared::net::{ PacketData, Packet, PacketDirection };
 use tokio::{
     spawn,
     sync::mpsc::{ unbounded_channel, UnboundedSender, UnboundedReceiver },
     task::JoinHandle,
-    net::{ TcpListener, TcpStream },
-    io::{ AsyncReadExt, BufWriter },
+    net::{ TcpStream },
+    io::{ AsyncReadExt, BufWriter, AsyncWriteExt },
 };
 pub struct ClientNetworkHandler {
     outgoing_sender: UnboundedSender<Packet>,
@@ -21,11 +20,9 @@ impl ClientNetworkHandler {
         let (send_out, mut receive_out) = unbounded_channel::<Packet>();
         let (send_in, receive_in) = unbounded_channel();
 
-        let stream = TcpStream::connect(address).await.unwrap();
+        let mut stream = TcpStream::connect(address).await.unwrap();
 
         let handle_thread = spawn(async move {
-            let mut clients = MetroHashMap::default();
-
             'main_loop: loop {
                 let mut buffer = Vec::new();
                 if let Err(e) = stream.read_to_end(&mut buffer).await {
@@ -37,7 +34,7 @@ impl ClientNetworkHandler {
                     Ok(packet_data) => {
                         let packet = Packet {
                             data: packet_data,
-                            direction: PacketDirection::Clientbound(id.clone()),
+                            direction: PacketDirection::FromServer,
                         };
 
                         if send_in.send(packet).is_err() {
@@ -48,29 +45,20 @@ impl ClientNetworkHandler {
                     Err(e) => error!("Failed to parse Packet: {}", e),
                 }
             }
-
+            let mut writer = BufWriter::new(&mut stream);
             while let Ok(packet) = receive_out.try_recv() {
-                let target = match packet.direction {
-                    PacketDirection::Serverbound(_) =>
-                        panic!(
-                            "Packets sent by the server are NOT supposed to be serverbound. Packet in question: {:?}",
-                            packet
-                        ),
-                    PacketDirection::Clientbound(target) => target,
-                };
-
-                if let Some(stream) = clients.get_mut(&target) {
-                    let writer = BufWriter::new(&mut *stream);
-                    if let Err(e) = packet.data.write_to_buffer(writer).await {
-                        error!("Failed to serialize packet: {}", e);
-                    }
+                if let PacketDirection::ToServer = packet.direction {
                 } else {
-                    error!(
-                        "Client with ID {:?} not found. They might have disconnected already.",
-                        target
-                    );
+                    error!("Packet with invalid direction '{:?}': {:?}", packet.direction, packet);
+                    panic!("Packet has invalid direction : {:?}", packet.direction);
+                }
+
+                if let Err(e) = packet.data.write_to_buffer(&writer).await {
+                    error!("Failed to serialize packet: {}", e);
                 }
             }
+
+            writer.flush().await.unwrap();
         });
 
         Self {
@@ -80,3 +68,4 @@ impl ClientNetworkHandler {
         }
     }
 }
+

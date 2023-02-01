@@ -8,7 +8,7 @@ use tokio::{
     sync::mpsc::{ unbounded_channel, UnboundedSender, UnboundedReceiver },
     task::JoinHandle,
     net::{ TcpListener },
-    io::{ AsyncReadExt, BufWriter },
+    io::{ AsyncReadExt, AsyncWriteExt, BufWriter },
 };
 
 pub struct ServerNetworkHandler {
@@ -69,10 +69,12 @@ impl ServerNetworkHandler {
                     };
 
                     if let Some(stream) = clients.get_mut(&target) {
-                        let writer = BufWriter::new(&mut *stream);
-                        if let Err(e) = packet.data.write_to_buffer(writer).await {
+                        let mut writer = BufWriter::new(&mut *stream);
+                        if let Err(e) = packet.data.write_to_buffer(&writer).await {
                             error!("Failed to serialize packet: {}", e);
                         }
+
+                        writer.flush().await.unwrap();
                     } else {
                         error!(
                             "Client with ID {:?} not found. They might have disconnected already.",

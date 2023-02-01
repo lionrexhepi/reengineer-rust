@@ -22,7 +22,7 @@ impl PacketData {
         unsafe { *<*const _>::from(self).cast::<u16>() }
     }
 
-    pub async fn write_to_buffer<T>(self, buffer: BufWriter<T>) -> anyhow::Result<()> {
+    pub async fn write_to_buffer<T>(self, buffer: &BufWriter<T>) -> anyhow::Result<()> {
         todo!()
     }
 
