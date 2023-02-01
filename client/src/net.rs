@@ -1,7 +1,7 @@
 use core::{ panic };
 
 use log::error;
-use shared::net::{ PacketData, Packet, PacketDirection };
+use shared::net::{ PacketData, Packet, PacketDirection, NetworkHandler };
 use tokio::{
     spawn,
     sync::mpsc::{ unbounded_channel, UnboundedSender, UnboundedReceiver },
@@ -89,6 +89,10 @@ impl NetworkHandler for FakeNetworkHandler {
             result.push(packet);
         }
         result
+    }
+
+    fn close_all(self) {
+       
     }
 }
 
