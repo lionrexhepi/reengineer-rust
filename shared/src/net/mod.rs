@@ -36,7 +36,7 @@ pub enum PacketDirection {
     FromClient(ClientId),
     FromServer,
     ToClient(ClientId),
-    ToServer
+    ToServer,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
@@ -50,7 +50,7 @@ impl ClientId {
 
 #[derive(Debug, Clone)]
 pub struct Packet {
-    pub packet_type: PacketDirection,
+    pub direction: PacketDirection,
     pub data: PacketData,
 }
 

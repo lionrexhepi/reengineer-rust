@@ -2,14 +2,7 @@ use core::panic;
 
 use log::error;
 use metrohash::MetroHashMap;
-use shared::net::{
-    PacketData,
-    Packet,
-    NetworkHandler,
-    ClientId,
-    PacketType,
-    PacketSource,
-};
+use shared::net::{ PacketData, Packet, NetworkHandler, ClientId, PacketDirection };
 use tokio::{
     spawn,
     sync::mpsc::{ unbounded_channel, UnboundedSender, UnboundedReceiver },
@@ -51,7 +44,7 @@ impl ServerNetworkHandler {
                         Ok(packet_data) => {
                             let packet = Packet {
                                 data: packet_data,
-                                packet_type: PacketType::Received(PacketSource::Client(id.clone())),
+                                direction: PacketDirection::FromClient(id.clone()),
                             };
 
                             if send_in.send(packet).is_err() {
@@ -64,24 +57,18 @@ impl ServerNetworkHandler {
                 }
 
                 while let Ok(packet) = receive_out.try_recv() {
-                    let target = match &packet.packet_type {
-                        PacketType::Received(_) =>
-                            panic!(
-                                "You can't just send received packets back to the client. Packet in question: {:?}",
-                                packet
-                            ),
-                        PacketType::ToSend(target) =>
-                            match target {
-                                PacketSource::Client(client_id) => client_id,
-                                PacketSource::Server =>
-                                    panic!(
-                                        "The server can't send packets to itself! Packet in question: {:?}",
-                                        packet
-                                    ),
-                            }
+                    let target = if let PacketDirection::ToClient(id) = packet.direction {
+                        id
+                    } else {
+                        error!(
+                            "Packet with invalid direction '{:?}': {:?}",
+                            packet.direction,
+                            packet
+                        );
+                        panic!("Packet has invalid direction : {:?}", packet.direction);
                     };
 
-                    if let Some(stream) = clients.get_mut(target) {
+                    if let Some(stream) = clients.get_mut(&target) {
                         let writer = BufWriter::new(&mut *stream);
                         if let Err(e) = packet.data.write_to_buffer(writer).await {
                             error!("Failed to serialize packet: {}", e);
