@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[repr(u16)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PacketData {
     Ping,
     BlockUpdate(BlockPos, Block),
@@ -31,10 +31,16 @@ impl PacketData {
     }
 }
 
-#[derive(Debug)]
-pub enum PacketDirection {
-    Serverbound(ClientId), //where did the packet come from
-    Clientbound(ClientId), //Where should it go
+#[derive(Debug, Clone)]
+pub enum PacketType {
+    Received(PacketSource),
+    ToSend(PacketSource),
+}
+
+#[derive(Debug, Clone)]
+pub enum PacketSource {
+    Client(ClientId),
+    Server,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
@@ -46,9 +52,9 @@ impl ClientId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Packet {
-    pub direction: PacketDirection,
+    pub packet_type: PacketType,
     pub data: PacketData,
 }
 

@@ -2,7 +2,14 @@ use core::panic;
 
 use log::error;
 use metrohash::MetroHashMap;
-use shared::net::{ PacketData, PacketDirection, Packet, NetworkHandler, ClientId };
+use shared::net::{
+    PacketData,
+    Packet,
+    NetworkHandler,
+    ClientId,
+    PacketType,
+    PacketSource,
+};
 use tokio::{
     spawn,
     sync::mpsc::{ unbounded_channel, UnboundedSender, UnboundedReceiver },
@@ -44,7 +51,7 @@ impl ServerNetworkHandler {
                         Ok(packet_data) => {
                             let packet = Packet {
                                 data: packet_data,
-                                direction: PacketDirection::Clientbound(id.clone()),
+                                packet_type: PacketType::Received(PacketSource::Client(id.clone())),
                             };
 
                             if send_in.send(packet).is_err() {
@@ -57,16 +64,24 @@ impl ServerNetworkHandler {
                 }
 
                 while let Ok(packet) = receive_out.try_recv() {
-                    let target = match packet.direction {
-                        PacketDirection::Serverbound(_) =>
+                    let target = match &packet.packet_type {
+                        PacketType::Received(_) =>
                             panic!(
-                                "Packets sent by the server are NOT supposed to be serverbound. Packet in question: {:?}",
+                                "You can't just send received packets back to the client. Packet in question: {:?}",
                                 packet
                             ),
-                        PacketDirection::Clientbound(target) => target,
+                        PacketType::ToSend(target) =>
+                            match target {
+                                PacketSource::Client(client_id) => client_id,
+                                PacketSource::Server =>
+                                    panic!(
+                                        "The server can't send packets to itself! Packet in question: {:?}",
+                                        packet
+                                    ),
+                            }
                     };
 
-                    if let Some(stream) = clients.get_mut(&target) {
+                    if let Some(stream) = clients.get_mut(target) {
                         let writer = BufWriter::new(&mut *stream);
                         if let Err(e) = packet.data.write_to_buffer(writer).await {
                             error!("Failed to serialize packet: {}", e);

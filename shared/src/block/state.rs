@@ -7,7 +7,7 @@ use crate::util::pos::BlockPos;
 use super::simple::*;
 
 #[count_ids]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Block {
     Air(AirState),
     Grass(GrassState),
@@ -15,16 +15,16 @@ pub enum Block {
 
 impl Block {
     pub fn to_id(&self) -> u16 {
-        (self.repr() as u16) << 8 | self.variant_id() as u16
+        ((self.repr() as u16) << 8) | (self.variant_id() as u16)
     }
 
-    pub fn from_id(id:u16) -> Option<Self> {
+    pub fn from_id(id: u16) -> Option<Self> {
         Self::from_ints((id >> 8) as u8, (id & 255) as u8)
     }
 }
 
 impl BlockHandler for Block {
-     fn is_replaceable(&self, pos: BlockPos) -> bool {
+    fn is_replaceable(&self, pos: BlockPos) -> bool {
         self.inner_handler().is_replaceable(pos)
     }
 }
@@ -35,18 +35,12 @@ pub trait BlockHandler {
     }
 }
 
-pub trait State:Debug {
+pub trait State: Debug + Clone {
     fn id(&self) -> u8 {
         0
     }
-    fn from_id(_id: u8) -> Self
-    where
-        Self: Sized,
-    {
+    fn from_id(_id: u8) -> Self where Self: Sized {
         Self::DEFAULT
     }
     const DEFAULT: Self;
 }
-
-
-

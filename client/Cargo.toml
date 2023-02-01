@@ -12,3 +12,4 @@ log = "0.4.17"
 log4rs = "1.2.0"
 metrohash = "1.0.6"
 shared = { path="../shared" }
+tokio = { version = "1.24.2",  features = ["full"]}

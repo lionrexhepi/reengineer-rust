@@ -2,14 +2,15 @@ use std::ops::Range;
 
 use glam::{ IVec3, Vec3 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChunkPos {
     x: i32,
     z: i32,
 }
 
 impl ChunkPos {
-    pub fn as_long(&self) -> u64 { //mostly used as a hash map key
+    pub fn as_long(&self) -> u64 {
+        //mostly used as a hash map key
         ((self.x as u64) << 32) | (self.z as u64)
     }
 
