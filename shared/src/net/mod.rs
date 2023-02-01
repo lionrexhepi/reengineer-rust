@@ -32,15 +32,11 @@ impl PacketData {
 }
 
 #[derive(Debug, Clone)]
-pub enum PacketType {
-    Received(PacketSource),
-    ToSend(PacketSource),
-}
-
-#[derive(Debug, Clone)]
-pub enum PacketSource {
-    Client(ClientId),
-    Server,
+pub enum PacketDirection {
+    FromClient(ClientId),
+    FromServer,
+    ToClient(ClientId),
+    ToServer
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
@@ -54,7 +50,7 @@ impl ClientId {
 
 #[derive(Debug, Clone)]
 pub struct Packet {
-    pub packet_type: PacketType,
+    pub packet_type: PacketDirection,
     pub data: PacketData,
 }
 
