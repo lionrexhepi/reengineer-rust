@@ -80,3 +80,38 @@ impl ClientNetworkHandler {
         }
     }
 }
+
+
+pub struct FakeNetworkHandler {
+    outgoing: UnboundedSender<Packet>,
+    incoming: UnboundedReceiver<Packet>
+}
+
+impl NetworkHandler for FakeNetworkHandler {
+    fn enqueue_packet(&self, packet: Packet) -> anyhow::Result<()> {
+        match self.outgoing.send(packet) {
+            Ok(_)=> Ok(()),
+            Err(e)=> Err(e.into())
+        }
+    }
+
+    fn retrieve_incoming(&mut self) -> Vec<Packet> {
+        let mut result = Vec::new();
+        while let Ok(packet) = self.incoming.try_recv() {
+            result.push(packet);
+        }
+        result
+    }
+}
+
+impl FakeNetworkHandler {
+    pub fn new_pair() -> (Self, Self) {
+        let (to_client, from_server) = unbounded_channel();
+        let (to_server, from_client) = unbounded_channel();
+
+        (
+            Self { incoming: from_server, outgoing: to_server},
+            Self { incoming: from_client, outgoing: to_client}
+        )
+    }
+}
