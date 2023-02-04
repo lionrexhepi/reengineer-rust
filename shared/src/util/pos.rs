@@ -49,13 +49,13 @@ impl Packetable for ChunkPos {
         Ok(())
     }
 
-    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Self {
+    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Option<Self> {
         let len = reader.refill_lookahead();
         assert!(len >= 48);
         let x = reader.peek(24) as i32;
         let z = reader.peek(24) as i32;
         reader.consume(48);
-        Self { x, z }
+        Some(Self { x, z })
     }
 }
 
@@ -211,12 +211,12 @@ impl Packetable for BlockPos {
         Ok(())
     }
 
-    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Self {
+    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Option<Self> {
         let len = reader.refill_lookahead();
         assert!(len >= 64);
         let long = reader.peek(64);
         reader.consume(64);
-        Self::from_long(long)
+        Some(Self::from_long(long))
     }
 }
 

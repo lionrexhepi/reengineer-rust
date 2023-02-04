@@ -2,7 +2,6 @@ use std::{ fmt::Debug };
 
 use anyhow::Ok;
 use bitter::BigEndianReader;
-use futures::executor::block_on;
 use tokio::{ io::{ BufWriter, AsyncWriteExt }, io::AsyncWrite };
 use uuid::Uuid;
 
