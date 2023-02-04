@@ -1,8 +1,8 @@
 use std::{ fmt::Debug };
 
-use anyhow::Ok;
+use anyhow::{ Ok, anyhow, bail, ensure };
 use bitter::{ BigEndianReader, BitReader };
-use tokio::{ io::{ BufWriter, AsyncWriteExt }, io::AsyncWrite };
+use tokio::{ io::{ BufWriter, AsyncWriteExt }, io::{ AsyncWrite, self } };
 use uuid::Uuid;
 
 use crate::{
@@ -16,7 +16,29 @@ pub trait Packetable {
         buffer: &mut BufWriter<T>
     ) -> anyhow::Result<()>;
 
-    fn read_from_bytes(reader: &mut BigEndianReader) -> Option<Self> where Self: Sized;
+    fn read_from_bytes(reader: &mut BigEndianReader) -> anyhow::Result<Self> where Self: Sized;
+}
+
+pub enum PacketReadError {
+    InvalidPacketType(u16),
+    NotEnoughData(u32, u32),
+    IOError(io::Error),
+}
+
+impl From<PacketReadError> for anyhow::Error {
+    fn from(value: PacketReadError) -> Self {
+        match value {
+            PacketReadError::NotEnoughData(actual, minimum) =>
+                anyhow!(
+                    "Packet data too small! Read {} bits while at least {} were needed",
+                    actual,
+                    minimum
+                ),
+            PacketReadError::IOError(inner) => inner.into(),
+            PacketReadError::InvalidPacketType(id) =>
+                anyhow!("There is no Packet type with ID {}!", id),
+        }
+    }
 }
 
 #[repr(u16)]
@@ -56,7 +78,7 @@ impl PacketData {
         let mut reader = BigEndianReader::new(data);
 
         let len = reader.refill_lookahead();
-        assert!(len >= 16);
+        ensure!(len >= 16, PacketReadError::NotEnoughData(len, 16));
 
         let id = reader.peek(16) as u16;
         reader.consume(16);
@@ -64,20 +86,20 @@ impl PacketData {
         match id {
             0 => {
                 let len = reader.refill_lookahead();
-                assert!(len >= 8);
+                ensure!(len >= 8, PacketReadError::NotEnoughData(len, 8));
                 reader.consume(8);
                 Ok(Self::Ping)
-            },
+            }
             1 => {
                 Ok(
                     Self::BlockUpdate(
-                        BlockPos::read_from_bytes(&mut reader).unwrap(),
-                        <&Block>::read_from_bytes(&mut reader).unwrap()
+                        BlockPos::read_from_bytes(&mut reader)?,
+                        <&Block>::read_from_bytes(&mut reader)?
                     )
                 )
-            },
+            }
 
-            _ => Err(anyhow::anyhow!("Uhm thats bad")),
+            _ => bail!(PacketReadError::InvalidPacketType(id)),
         }
     }
 }

@@ -1,17 +1,26 @@
 use std::{ fmt::Debug, collections::hash_map::Entry };
 
+use anyhow::{ anyhow, ensure };
 use bitter::BitReader;
 use metrohash::MetroHashMap;
 use once_cell::sync::Lazy;
 use proc_macros::count_ids;
-use log::error;
 use tokio::io::AsyncWriteExt;
 
-use crate::{ util::pos::BlockPos, net::Packetable, wait };
+use crate::{ util::pos::BlockPos, net::{ Packetable, PacketReadError }, wait };
 
 use super::simple::*;
 
 static mut CACHE: Lazy<MetroHashMap<u16, Block>> = Lazy::new(MetroHashMap::default);
+
+#[derive(Debug)]
+pub struct InvalidBlockIdError(pub u8);
+
+impl From<InvalidBlockIdError> for anyhow::Error {
+    fn from(value: InvalidBlockIdError) -> Self {
+        anyhow!("Invalid Block Id: {}", value.0)
+    }
+}
 
 #[count_ids]
 #[derive(Debug, Clone)]
@@ -31,26 +40,15 @@ impl Block {
         ((self.repr() as u16) << 8) | (self.variant_id() as u16)
     }
 
-    pub fn from_id(id: u16) -> Option<&'static Self> {
+    pub fn from_id(id: u16) -> anyhow::Result<&'static Self> {
         let map = get_cache();
 
         let entry = map.entry(id);
 
-        if let Entry::Vacant(_) = entry {
-            if let Some(new) = Self::from_ints((id >> 8) as u8, (id & 255) as u8) {
-                Some(entry.or_insert(new))
-            } else {
-                error!("Invalid block id: {}", id);
-                Some(<&Block>::default())
-            }
-        } else {
-            Some(
-                entry.or_insert_with(||
-                    panic!(
-                        "Logically and factually this line should never have been called. You failed."
-                    )
-                )
-            )
+        match entry {
+            Entry::Occupied(inner) => Ok(inner.get()),
+            Entry::Vacant(inner) =>
+                Ok(entry.or_insert(Self::from_ints((id >> 8) as u8, (id & 255) as u8)?)),
         }
     }
 }
@@ -76,9 +74,9 @@ impl Packetable for &Block {
         Ok(())
     }
 
-    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Option<Self> {
+    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
         let len = reader.refill_lookahead();
-        assert!(len >= 16);
+        ensure!(len >= 16, PacketReadError::NotEnoughData(len, 16));
         let id = reader.peek(16) as u16;
         reader.consume(16);
         Block::from_id(id)
@@ -99,8 +97,8 @@ pub trait State: Debug + Clone {
     fn id(&self) -> u8 {
         0
     }
-    fn from_id(_id: u8) -> Self where Self: Sized {
-        Self::DEFAULT
+    fn from_id(_id: u8) -> anyhow::Result<Self> where Self: Sized {
+        Ok(Self::DEFAULT)
     }
     const DEFAULT: Self;
 }

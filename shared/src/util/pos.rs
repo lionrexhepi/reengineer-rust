@@ -1,10 +1,26 @@
-use std::ops::Range;
+use std::{ ops::Range, error::Error };
 
 use bitter::BitReader;
 use glam::{ IVec3, Vec3 };
 use tokio::io::AsyncWriteExt;
 
+use anyhow::{ ensure, anyhow };
+
 use crate::{ net::Packetable, wait };
+
+pub enum PositionDeserializeError {
+    BlockPos(u32),
+    ChunkPos(u32)
+}
+
+impl From<PositionDeserializeError> for anyhow::Error {
+    fn from(value: PositionDeserializeError) -> Self {
+        match value {
+            PositionDeserializeError::BlockPos(bits) => anyhow!("Need at least 64 bits to deserialize a BlockPos, yet there are only {} available.", bits),
+            PositionDeserializeError::ChunkPos(bits) => anyhow!("Need at least 48 bits to deserialize a ChunkPos, yet there are only {} available.", bits),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ChunkPos {
@@ -49,13 +65,45 @@ impl Packetable for ChunkPos {
         Ok(())
     }
 
-    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Option<Self> {
+    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
         let len = reader.refill_lookahead();
-        assert!(len >= 48);
+        ensure!(len >= 48, PositionDeserializeError::ChunkPos(len));
         let x = reader.peek(24) as i32;
         let z = reader.peek(24) as i32;
         reader.consume(48);
-        Some(Self { x, z })
+        Ok(Self { x, z })
+    }
+}
+
+#[derive(Debug)]
+pub enum InvalidPositionError {
+    InvalidX(i32),
+    InvalidY(i32),
+    InvalidZ(i32),
+}
+
+impl From<InvalidPositionError> for anyhow::Error {
+    fn from(value: InvalidPositionError) -> Self {
+        match value {
+            InvalidPositionError::InvalidX(x) =>
+                anyhow!(
+                    "Invalid x value {}. X Coordinates must be in the range {:?}.",
+                    x,
+                    BlockPos::VALID_X
+                ),
+            InvalidPositionError::InvalidY(y) =>
+                anyhow!(
+                    "Invalid y value {}. Y Coordinates must be in the range {:?}.",
+                    y,
+                    BlockPos::VALID_Y
+                ),
+            InvalidPositionError::InvalidZ(z) =>
+                anyhow!(
+                    "Invalid z value {}. Z Coordinates must be in the range {:?}.",
+                    z,
+                    BlockPos::VALID_Z
+                ),
+        }
     }
 }
 
@@ -135,6 +183,14 @@ impl BlockPos {
         }
     }
 
+    pub fn validate(&self) -> anyhow::Result<()> {
+        ensure!(Self::VALID_X.contains(&self.x), InvalidPositionError::InvalidX(self.x));
+        ensure!(Self::VALID_Y.contains(&self.y), InvalidPositionError::InvalidY(self.y));
+        ensure!(Self::VALID_Z.contains(&self.z), InvalidPositionError::InvalidZ(self.z));
+
+        Ok(())
+    }
+
     pub fn offset_up(&self) -> Self {
         Self {
             y: self.y + 1,
@@ -211,17 +267,11 @@ impl Packetable for BlockPos {
         Ok(())
     }
 
-    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Option<Self> {
+    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
         let len = reader.refill_lookahead();
-        assert!(len >= 64);
+        ensure!(len >= 64, PositionDeserializeError::BlockPos(len));
         let long = reader.peek(64);
         reader.consume(64);
-        Some(Self::from_long(long))
-    }
-}
-
-impl serde::Serialize for BlockPos {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
-        serializer.serialize_u64(self.as_long())
+        Ok(Self::from_long(long))
     }
 }

@@ -38,10 +38,10 @@ pub fn count_ids(_attr: TokenStream, target: TokenStream) -> TokenStream {
                 }
             }
 
-            fn from_ints(repr: u8, variant: u8) -> Option<Self> {
+            fn from_ints(repr: u8, variant: u8) -> anyhow::Result<Self> {
                 match repr {
-                    #(#reps => Some(Self::#fields(#inners::from_id(variant))),)*
-                    _ => None,
+                    #(#reps => Ok(Self::#fields(#inners::from_id(variant)?)),)*
+                    _ => Err(anyhow::anyhow!(InvalidBlockIdError(repr))),
                 }
             }
 

@@ -1,15 +1,26 @@
+use anyhow::{ anyhow, ensure };
 use bitter::{ BigEndianReader, BitReader };
 use metrohash::MetroHashMap;
+use tokio::io::BufReader;
 
-use crate::{
-    util::pos::{ ChunkPos, BlockPos },
-    block::state::Block,
-};
+use crate::{ util::pos::{ ChunkPos, BlockPos }, block::state::{ Block }, net::Packetable };
 
 #[derive(Debug, Clone)]
 pub struct SubChunk {
     data: [u16; Self::BLOCK_COUNT],
     y_base: u8,
+}
+
+pub struct InvalidSubChunkDataError(pub usize);
+
+impl From<InvalidSubChunkDataError> for anyhow::Error {
+    fn from(value: InvalidSubChunkDataError) -> Self {
+        anyhow!(
+            "Chunk data has invalid length. A chunk needs to be exactly {} bytes, while this one is only {} bytes.",
+            SubChunk::BYTES,
+            value.0
+        )
+    }
 }
 
 impl SubChunk {
@@ -23,10 +34,13 @@ impl SubChunk {
         }
     }
 
-    pub fn from_data(y_base: u8, data: [u8; Self::BLOCK_COUNT * 2]) -> SubChunk {
-        assert!(data.len() == Self::BLOCK_COUNT * 2);
+    pub fn try_from_data(y_base: u8, data: [u8; Self::BLOCK_COUNT * 2]) -> anyhow::Result<Self> {
+        if data.len() != Self::BLOCK_COUNT * 2 {
+        }
 
-        SubChunk {
+        ensure!(data.len() == Self::BYTES, InvalidSubChunkDataError(data.len()));
+
+        Ok(SubChunk {
             y_base,
             data: (
                 unsafe {
@@ -35,15 +49,50 @@ impl SubChunk {
             )
                 .try_into()
                 .unwrap(),
-        }
+        })
     }
 
     pub fn y_base(&self) -> u8 {
         self.y_base
     }
 
-    pub fn get_block(&self, x: i16, y: i16, z: i16) -> &Block {
-        Block::from_id(self.data[((y << 8) | (z << 4) | x) as usize]).unwrap_or_default()
+    pub fn get_block(&self, x: i16, y: i16, z: i16) -> anyhow::Result<&Block> {
+        Block::from_id(self.data[((y << 8) | (z << 4) | x) as usize])
+    }
+}
+
+impl Packetable for SubChunk {
+    fn write_to_buffer<T: tokio::io::AsyncWrite + Unpin>(
+        self,
+        buffer: &mut tokio::io::BufWriter<T>
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    fn read_from_bytes(reader: &mut BigEndianReader) -> anyhow::Result<Self> where Self: Sized {
+        todo!()
+    }
+}
+
+pub enum InvalidChunkDataError {
+    InvalidHeaderSize(usize),
+    InvalidDataSize(usize, usize),
+}
+
+impl From<InvalidChunkDataError> for anyhow::Error {
+    fn from(value: InvalidChunkDataError) -> Self {
+        match value {
+            InvalidChunkDataError::InvalidHeaderSize(size) =>
+                anyhow!("Found {}-bit subchunk count instead of the expected 5 bits ", 0),
+            InvalidChunkDataError::InvalidDataSize(actual, expected) =>
+                anyhow!(
+                    "The chunk data is {} bits, or {} bytes large, but it needs to be {} bits / {} bytes",
+                    actual,
+                    actual / 8,
+                    expected,
+                    expected / 8
+                ),
+        }
     }
 }
 
@@ -57,19 +106,43 @@ impl Chunk {
         Chunk { non_air_sub_chunks: MetroHashMap::default() }
     }
 
-    pub fn from_data(data: &[u8]) -> Self {
-        let mut reader = BigEndianReader::new(data);
+    pub fn get_block(&self, pos: BlockPos) -> anyhow::Result<&Block> {
+        let y = pos.y();
+        pos.validate()?;
+
+        Ok(match self.non_air_sub_chunks.get(&((y << 4) as u8)) {
+            Some(sc) =>
+                sc.get_block((pos.x() & 15) as i16, (y & 15) as i16, (pos.z() & 15) as i16)?,
+            None => <&Block>::default(),
+        })
+    }
+}
+
+impl Packetable for Chunk {
+    fn write_to_buffer<T: tokio::io::AsyncWrite + Unpin>(
+        self,
+        buffer: &mut tokio::io::BufWriter<T>
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    fn read_from_bytes(reader: &mut BigEndianReader) -> anyhow::Result<Self> where Self: Sized {
+        let len = reader.refill_lookahead();
+
+        ensure!(len > 5, InvalidChunkDataError::InvalidHeaderSize(len as usize));
+
+        let sub_chunk_count = reader.peek(5) as usize;
+
+        let bits_needed = sub_chunk_count * (SubChunk::BYTES * 8 + 5);
 
         let len = reader.refill_lookahead() as usize;
-        assert!(len > 5);
-        let subchunk_count = reader.peek(5) as u8;
-        reader.consume(5);
-        assert!(len == (subchunk_count as usize) * (5 + SubChunk::BYTES * 8));
+
+        ensure!(len >= bits_needed, InvalidChunkDataError::InvalidDataSize(len, bits_needed));
 
         let mut sub_chunks = MetroHashMap::default();
 
-        for _ in 0..subchunk_count {
-            let y_base = reader.peek(5) as u8;
+        for _ in 0..sub_chunk_count {
+            let y_base = (reader.peek(5) as u8) * 16;
             let mut data = [0u8; SubChunk::BYTES];
 
             (0..SubChunk::BYTES).for_each(|i| {
@@ -77,23 +150,12 @@ impl Chunk {
                 reader.consume(8);
             });
 
-            sub_chunks.insert(y_base, SubChunk::from_data(y_base, data));
+            sub_chunks.insert(y_base, SubChunk::try_from_data(y_base, data)?);
         }
 
-        Self {
+        Ok(Self {
             non_air_sub_chunks: sub_chunks,
-        }
-    }
-
-    pub fn get_block(&self, pos: BlockPos) -> &Block {
-        let y = pos.y();
-        assert!(y > 0 && y < 256);
-
-        match self.non_air_sub_chunks.get(&((y << 4) as u8)) {
-            Some(sc) =>
-                sc.get_block((pos.x() & 15) as i16, (pos.y() & 15) as i16, (pos.z() & 15) as i16),
-            None => <&Block>::default(),
-        }
+        })
     }
 }
 

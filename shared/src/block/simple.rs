@@ -1,6 +1,6 @@
 use crate::util::pos::BlockPos;
 
-use super::state::{BlockHandler, State};
+use super::state::{ BlockHandler, State };
 
 #[derive(Debug, Clone)]
 pub struct AirState;
@@ -32,8 +32,8 @@ impl State for GrassState {
         self.snowy as u8
     }
 
-    fn from_id(id: u8) -> Self {
-        Self { snowy: id == 1 }
+    fn from_id(id: u8) -> anyhow::Result<Self> {
+        Ok(Self { snowy: id == 1 })
     }
 
     const DEFAULT: Self = Self::NORMAL;
