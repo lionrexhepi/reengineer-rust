@@ -43,13 +43,7 @@ impl Block {
     pub fn from_id(id: u16) -> anyhow::Result<&'static Self> {
         let map = get_cache();
 
-        let entry = map.entry(id);
-
-        match entry {
-            Entry::Occupied(inner) => Ok(inner.get()),
-            Entry::Vacant(inner) =>
-                Ok(entry.or_insert(Self::from_ints((id >> 8) as u8, (id & 255) as u8)?)),
-        }
+        Ok(map.entry(id).or_insert(Self::from_ints((id >> 8) as u8, (id & 255) as u8)?))
     }
 }
 
