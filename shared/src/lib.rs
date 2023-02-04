@@ -1,4 +1,5 @@
 pub mod block;
+#[macro_use]
 pub mod util;
 pub mod dimension;
 pub mod net;

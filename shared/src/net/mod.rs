@@ -1,13 +1,24 @@
-use std::{ net::TcpStream, fmt::Debug };
+use std::{ fmt::Debug };
 
-use tokio::{ net::unix::SocketAddr, io::BufWriter };
+use anyhow::Ok;
+use bitter::BigEndianReader;
+use futures::executor::block_on;
+use tokio::{ io::{ BufWriter, AsyncWriteExt }, io::AsyncWrite };
 use uuid::Uuid;
 
 use crate::{
     util::pos::{ BlockPos, ChunkPos },
-    block::{ state::{ Block, State }, simple::AirState },
+    block::{ state::{ Block } },
     dimension::chunk::Chunk,
 };
+pub trait Packetable {
+    fn write_to_buffer<T: AsyncWrite + Unpin>(
+        self,
+        buffer: &mut BufWriter<T>
+    ) -> anyhow::Result<()>;
+
+    fn read_from_bytes(reader: &mut BigEndianReader) -> Option<Self> where Self:Sized;
+}
 
 #[repr(u16)]
 #[derive(Debug, Clone)]
@@ -22,8 +33,24 @@ impl PacketData {
         unsafe { *<*const _>::from(self).cast::<u16>() }
     }
 
-    pub async fn write_to_buffer<T>(self, buffer: &BufWriter<T>) -> anyhow::Result<()> {
-        todo!()
+    pub async fn write_to_buffer<T: AsyncWrite + Unpin>(
+        self,
+        buffer: &mut BufWriter<T>
+    ) -> anyhow::Result<()> {
+        buffer.write_u16(self.discriminant()).await?;
+
+        match self {
+            PacketData::Ping => buffer.write_u8(1).await?,
+            PacketData::BlockUpdate(pos, block) => {
+                pos.write_to_buffer(buffer)?;
+                block.write_to_buffer(buffer)?;
+            }
+            PacketData::ChunkData(pos, _chunk) => {
+                buffer.write_u64(pos.as_long()).await?; //TODO: write the chunk too
+            }
+        }
+
+        Ok(())
     }
 
     pub fn from_bytes(data: &[u8]) -> anyhow::Result<Self> {

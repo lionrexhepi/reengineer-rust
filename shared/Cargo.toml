@@ -5,8 +5,10 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.68"
+async-trait = "0.1.64"
 bitter = "0.6.1"
 chrono = "0.4.23"
+futures = "0.3.26"
 glam = "0.22.0"
 log = "0.4.17"
 log4rs = { version = "1.2.0", features = ["background_rotation", "rolling_file_appender", "console_appender"]}

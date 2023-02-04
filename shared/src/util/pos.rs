@@ -1,6 +1,10 @@
 use std::ops::Range;
 
+use bitter::BitReader;
 use glam::{ IVec3, Vec3 };
+use tokio::io::AsyncWriteExt;
+
+use crate::{ net::Packetable, wait };
 
 #[derive(Debug, Clone)]
 pub struct ChunkPos {
@@ -24,6 +28,34 @@ impl ChunkPos {
 
     pub fn z(&self) -> i32 {
         self.z
+    }
+}
+
+impl Packetable for ChunkPos {
+    fn write_to_buffer<T: tokio::io::AsyncWrite + Unpin>(
+        self,
+        buffer: &mut tokio::io::BufWriter<T>
+    ) -> anyhow::Result<()> {
+        wait!(
+            buffer.write(
+                &[((self.x >> 16) & 255) as u8, ((self.x >> 8) & 255) as u8, (self.x & 255) as u8]
+            ) // only the first 23 bits are actually used, so we write 3 bytes(24 bits) per coordinate
+        )?;
+        wait!(
+            buffer.write(
+                &[((self.z >> 16) & 255) as u8, ((self.z >> 8) & 255) as u8, (self.z & 255) as u8]
+            )
+        )?;
+        Ok(())
+    }
+
+    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Self {
+        let len = reader.refill_lookahead();
+        assert!(len >= 48);
+        let x = reader.peek(24) as i32;
+        let z = reader.peek(24) as i32;
+        reader.consume(48);
+        Self { x, z }
     }
 }
 
@@ -167,6 +199,24 @@ impl From<BlockPos> for Vec3 {
             y: value.y() as f32,
             z: value.z() as f32,
         }
+    }
+}
+
+impl Packetable for BlockPos {
+    fn write_to_buffer<T: tokio::io::AsyncWrite + Unpin>(
+        self,
+        buffer: &mut tokio::io::BufWriter<T>
+    ) -> anyhow::Result<()> {
+        wait!(buffer.write_u64(self.as_long()))?;
+        Ok(())
+    }
+
+    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Self {
+        let len = reader.refill_lookahead();
+        assert!(len >= 64);
+        let long = reader.peek(64);
+        reader.consume(64);
+        Self::from_long(long)
     }
 }
 

@@ -1,4 +1,4 @@
-use bitter::{ LittleEndianReader, BitReader };
+use bitter::{ BigEndianReader, BitReader };
 use metrohash::MetroHashMap;
 
 use crate::{
@@ -58,7 +58,7 @@ impl Chunk {
     }
 
     pub fn from_data(data: &[u8]) -> Self {
-        let mut reader = LittleEndianReader::new(data);
+        let mut reader = BigEndianReader::new(data);
 
         let len = reader.refill_lookahead() as usize;
         assert!(len > 5);

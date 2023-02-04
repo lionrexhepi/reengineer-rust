@@ -1,11 +1,13 @@
-use std::{ fmt::Debug, sync::{ RwLock, Mutex }, collections::hash_map::Entry };
+use std::{ fmt::Debug, collections::hash_map::Entry };
 
+use bitter::BitReader;
 use metrohash::MetroHashMap;
 use once_cell::sync::Lazy;
 use proc_macros::count_ids;
 use log::error;
+use tokio::io::AsyncWriteExt;
 
-use crate::util::pos::BlockPos;
+use crate::{ util::pos::BlockPos, net::Packetable, wait };
 
 use super::simple::*;
 
@@ -19,7 +21,9 @@ pub enum Block {
 }
 
 fn get_cache() -> &'static mut Lazy<MetroHashMap<u16, Block>> {
-    unsafe { &mut CACHE } //race conditions etc shouldnt be an issue since even if two block states are inserted at the same time, theyre the same anyway
+    unsafe {
+        &mut CACHE
+    } //race conditions etc shouldnt be an issue since even if two block states are inserted at the same time, theyre the same anyway
 }
 
 impl Block {
@@ -60,6 +64,24 @@ impl Default for &Block {
 impl BlockHandler for Block {
     fn is_replaceable(&self, pos: BlockPos) -> bool {
         self.inner_handler().is_replaceable(pos)
+    }
+}
+
+impl Packetable for &Block {
+    fn write_to_buffer<T: tokio::io::AsyncWrite + Unpin>(
+        self,
+        buffer: &mut tokio::io::BufWriter<T>
+    ) -> anyhow::Result<()> {
+        wait!(buffer.write_u16(self.to_id()))?;
+        Ok(())
+    }
+
+    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> Option<Self> {
+        let len = reader.refill_lookahead();
+        assert!(len >= 16);
+        let id = reader.peek(16) as u16;
+        reader.consume(16);
+        Block::from_id(id)
     }
 }
 
