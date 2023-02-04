@@ -165,12 +165,26 @@ pub enum ChunkProviderError {
     ChunkNotGeneratedError,
 }
 
+impl From<ChunkProviderError> for anyhow::Error {
+    fn from(value: ChunkProviderError) -> Self {
+        match value {
+            ChunkProviderError::IOError(inner) => anyhow!(inner),
+            ChunkProviderError::ChunkNotGeneratedError => anyhow!("Chunk not generated yet!"),
+        }
+    }
+}
+
 pub trait ChunkProvider {
-    fn get_chunk(&self, pos: &ChunkPos) -> Result<&Chunk, ChunkProviderError>;
+    fn get_chunk(&self, pos: &ChunkPos) -> anyhow::Result<&Chunk>;
+
+}
+
+pub enum ChunkStorageError {
+    
 }
 
 pub trait ChunkStorage {
     fn is_chunk_cached(&self, pos: &ChunkPos) -> bool;
 
-    fn get_chunk(&mut self, pos: &ChunkPos) -> &Chunk;
+    fn get_chunk(&mut self, pos: &ChunkPos) -> anyhow::Result<&Chunk>;
 }
