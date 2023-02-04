@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.68"
+bevy = "0.9.1"
 concurrent-queue = "2.1.0"
 itertools = "0.10.5"
 log = "0.4.17"
