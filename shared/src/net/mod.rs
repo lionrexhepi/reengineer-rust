@@ -1,7 +1,7 @@
 use std::{ fmt::Debug };
 
 use anyhow::Ok;
-use bitter::BigEndianReader;
+use bitter::{ BigEndianReader, BitReader };
 use tokio::{ io::{ BufWriter, AsyncWriteExt }, io::AsyncWrite };
 use uuid::Uuid;
 
@@ -16,14 +16,14 @@ pub trait Packetable {
         buffer: &mut BufWriter<T>
     ) -> anyhow::Result<()>;
 
-    fn read_from_bytes(reader: &mut BigEndianReader) -> Option<Self> where Self:Sized;
+    fn read_from_bytes(reader: &mut BigEndianReader) -> Option<Self> where Self: Sized;
 }
 
 #[repr(u16)]
 #[derive(Debug, Clone)]
 pub enum PacketData {
     Ping,
-    BlockUpdate(BlockPos, Block),
+    BlockUpdate(BlockPos, &'static Block),
     ChunkData(ChunkPos, Chunk),
 }
 
@@ -53,7 +53,32 @@ impl PacketData {
     }
 
     pub fn from_bytes(data: &[u8]) -> anyhow::Result<Self> {
-        todo!()
+        let mut reader = BigEndianReader::new(data);
+
+        let len = reader.refill_lookahead();
+        assert!(len >= 16);
+
+        let id = reader.peek(16) as u16;
+        reader.consume(16);
+
+        match id {
+            0 => {
+                let len = reader.refill_lookahead();
+                assert!(len >= 8);
+                reader.consume(8);
+                Ok(Self::Ping)
+            },
+            1 => {
+                Ok(
+                    Self::BlockUpdate(
+                        BlockPos::read_from_bytes(&mut reader).unwrap(),
+                        <&Block>::read_from_bytes(&mut reader).unwrap()
+                    )
+                )
+            },
+
+            _ => Err(anyhow::anyhow!("Uhm thats bad")),
+        }
     }
 }
 
