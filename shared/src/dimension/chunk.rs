@@ -3,7 +3,7 @@ use metrohash::MetroHashMap;
 
 use crate::{
     util::pos::{ ChunkPos, BlockPos },
-    block::{ state::{ Block, State }, simple::AirState },
+    block::state::Block,
 };
 
 #[derive(Debug, Clone)]
@@ -42,10 +42,8 @@ impl SubChunk {
         self.y_base
     }
 
-    pub fn get_block(&self, x: i16, y: i16, z: i16) -> Block {
-        Block::from_id(self.data[((y << 8) | (z << 4) | x) as usize]).unwrap_or(
-            Block::Air(AirState::DEFAULT)
-        )
+    pub fn get_block(&self, x: i16, y: i16, z: i16) -> &Block {
+        Block::from_id(self.data[((y << 8) | (z << 4) | x) as usize]).unwrap_or_default()
     }
 }
 
@@ -87,14 +85,14 @@ impl Chunk {
         }
     }
 
-    pub fn get_block(&self, pos: BlockPos) -> Block {
+    pub fn get_block(&self, pos: BlockPos) -> &Block {
         let y = pos.y();
         assert!(y > 0 && y < 256);
 
         match self.non_air_sub_chunks.get(&((y << 4) as u8)) {
             Some(sc) =>
                 sc.get_block((pos.x() & 15) as i16, (pos.y() & 15) as i16, (pos.z() & 15) as i16),
-            None => Block::Air(AirState::DEFAULT),
+            None => <&Block>::default(),
         }
     }
 }

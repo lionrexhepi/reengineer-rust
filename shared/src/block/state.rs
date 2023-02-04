@@ -1,10 +1,15 @@
-use std::fmt::Debug;
+use std::{ fmt::Debug, sync::{ RwLock, Mutex }, collections::hash_map::Entry };
 
+use metrohash::MetroHashMap;
+use once_cell::sync::Lazy;
 use proc_macros::count_ids;
+use log::error;
 
 use crate::util::pos::BlockPos;
 
 use super::simple::*;
+
+static mut CACHE: Lazy<MetroHashMap<u16, Block>> = Lazy::new(MetroHashMap::default);
 
 #[count_ids]
 #[derive(Debug, Clone)]
@@ -13,13 +18,42 @@ pub enum Block {
     Grass(GrassState),
 }
 
+fn get_cache() -> &'static mut Lazy<MetroHashMap<u16, Block>> {
+    unsafe { &mut CACHE } //race conditions etc shouldnt be an issue since even if two block states are inserted at the same time, theyre the same anyway
+}
+
 impl Block {
     pub fn to_id(&self) -> u16 {
         ((self.repr() as u16) << 8) | (self.variant_id() as u16)
     }
 
-    pub fn from_id(id: u16) -> Option<Self> {
-        Self::from_ints((id >> 8) as u8, (id & 255) as u8)
+    pub fn from_id(id: u16) -> Option<&'static Self> {
+        let map = get_cache();
+
+        let entry = map.entry(id);
+
+        if let Entry::Vacant(_) = entry {
+            if let Some(new) = Self::from_ints((id >> 8) as u8, (id & 255) as u8) {
+                Some(entry.or_insert(new))
+            } else {
+                error!("Invalid block id: {}", id);
+                Some(<&Block>::default())
+            }
+        } else {
+            Some(
+                entry.or_insert_with(||
+                    panic!(
+                        "Logically and factually this line should never have been called. You failed."
+                    )
+                )
+            )
+        }
+    }
+}
+
+impl Default for &Block {
+    fn default() -> Self {
+        (unsafe { &mut CACHE }).entry(0).or_insert(Block::Air(AirState::DEFAULT))
     }
 }
 
@@ -32,6 +66,10 @@ impl BlockHandler for Block {
 pub trait BlockHandler {
     fn is_replaceable(&self, _pos: BlockPos) -> bool {
         false
+    }
+
+    fn map_color(&self) -> i32 {
+        1
     }
 }
 
