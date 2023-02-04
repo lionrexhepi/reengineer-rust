@@ -53,7 +53,7 @@ impl ClientNetworkHandler {
                     panic!("Packet has invalid direction : {:?}", packet.direction);
                 }
 
-                if let Err(e) = packet.data.write_to_buffer(&writer).await {
+                if let Err(e) = packet.data.write_to_buffer(&mut writer).await {
                     error!("Failed to serialize packet: {}", e);
                 }
             }
