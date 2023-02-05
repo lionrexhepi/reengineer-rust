@@ -70,7 +70,7 @@ impl ServerNetworkHandler {
 
                     if let Some(stream) = clients.get_mut(&target) {
                         let mut writer = BufWriter::new(&mut *stream);
-                        if let Err(e) = packet.data.write_to_buffer(&writer).await {
+                        if let Err(e) = packet.data.write_to_buffer(&mut writer).await {
                             error!("Failed to serialize packet: {}", e);
                         }
 
