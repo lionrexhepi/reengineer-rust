@@ -43,8 +43,8 @@ impl ChunkStorage for ServerChunkStorage {
 
         let entry = self.chunk_map.entry(id);
 
-        if let Entry::Occupied(inner) = entry {
-            Ok(inner.get())
+        if let Entry::Occupied(_) = &entry {
+            Ok(entry.or_insert_with(Chunk::empty))
         } else if let Some(chunk) = self.file_loader.get_chunk(pos) {
             Ok(entry.or_insert(chunk))
         } else {
