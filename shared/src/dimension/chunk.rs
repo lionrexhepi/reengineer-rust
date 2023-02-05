@@ -177,7 +177,7 @@ pub trait ChunkLoader {
     fn get_chunk(&self, pos: &ChunkPos) -> Option<Chunk>;
 }
 
-pub enum ChunkStorageError {}
+
 
 pub trait ChunkStorage {
     fn is_chunk_cached(&self, pos: &ChunkPos) -> bool;
