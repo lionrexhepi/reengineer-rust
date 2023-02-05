@@ -1,4 +1,4 @@
-use std::{ path::Path };
+use std::{ path::Path, collections::hash_map::Entry };
 
 use log::error;
 use metrohash::MetroHashMap;
@@ -15,13 +15,15 @@ impl DiskChunkLoader {
     }
 }
 
-impl ChunkProvider for DiskChunkLoader {
-    fn get_chunk(&self, _pos: &shared::util::pos::ChunkPos) -> Result<&Chunk, ChunkProviderError> {
-        Err(ChunkProviderError::ChunkNotGeneratedError)
+impl ChunkLoader for DiskChunkLoader {
+    fn get_chunk(&self, _pos: &shared::util::pos::ChunkPos) -> Option<Chunk> {
+        None
     }
 }
 
-trait ChunkGenerator: ChunkProvider {}
+trait ChunkGenerator {
+    fn try_generate(&self, pos: &ChunkPos) -> anyhow::Result<Chunk>;
+}
 
 pub struct ServerChunkStorage {
     file_loader: DiskChunkLoader,
@@ -31,55 +33,22 @@ pub struct ServerChunkStorage {
 
 static EMPTY_CHUNK: Lazy<Chunk> = Lazy::new(Chunk::empty);
 
-impl ServerChunkStorage {
-    /// the error bool says whether you should try to generate the chunk first
-    fn try_from_disk(&self, pos: &ChunkPos) -> Result<&Chunk, bool> {
-        match self.file_loader.get_chunk(pos) {
-            Ok(chunk) => Ok(chunk),
-            Err(e) => Err(matches!(e, ChunkProviderError::ChunkNotGeneratedError)),
-        }
-    }
-
-    fn try_generate(&self, pos: &ChunkPos) -> Result<&Chunk, ()> {
-        match self.generator.get_chunk(pos) {
-            Ok(chunk) => Ok(chunk),
-            Err(err_type) => {
-                error!("Couldn't generate chunk! Error of type {:#?}", err_type);
-                debug_assert!(false);
-                Err(())
-            }
-        }
-    }
-}
-
 impl ChunkStorage for ServerChunkStorage {
     fn is_chunk_cached(&self, pos: &ChunkPos) -> bool {
         self.chunk_map.contains_key(&pos.as_long())
     }
 
-    fn get_chunk(&mut self, pos: &ChunkPos) -> &Chunk {
+    fn get_chunk(&mut self, pos: &ChunkPos) -> anyhow::Result<&Chunk> {
         let id = pos.as_long();
 
-        if let Some(c) = self.chunk_map.get(&id) {
-            return c;
-        }
+        let entry = self.chunk_map.entry(id);
 
-        match self.try_from_disk(pos) {
-            Ok(c) => {
-                return c;
-            }
-            Err(e) => {
-                if e {
-                    //Double it and give it to the next person
-                } else {
-                    return &EMPTY_CHUNK;
-                }
-            }
-        }
-
-        match self.try_generate(pos) {
-            Ok(chunk) => chunk,
-            Err(_) => &EMPTY_CHUNK,
+        if let Entry::Occupied(inner) = entry {
+            Ok(inner.get())
+        } else if let Some(chunk) = self.file_loader.get_chunk(pos) {
+            Ok(entry.or_insert(chunk))
+        } else {
+            Ok(entry.or_insert(self.generator.try_generate(pos)?))
         }
     }
 }

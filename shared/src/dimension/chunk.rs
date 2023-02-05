@@ -161,27 +161,23 @@ impl Packetable for Chunk {
 
 #[derive(Debug)]
 pub enum ChunkProviderError {
-    IOError(std::io::Error),
-    ChunkNotGeneratedError,
+    ChunkGenerationFailedError(ChunkPos),
 }
 
 impl From<ChunkProviderError> for anyhow::Error {
     fn from(value: ChunkProviderError) -> Self {
         match value {
-            ChunkProviderError::IOError(inner) => anyhow!(inner),
-            ChunkProviderError::ChunkNotGeneratedError => anyhow!("Chunk not generated yet!"),
+            ChunkProviderError::ChunkGenerationFailedError(pos) =>
+                anyhow!("Couldn't generate chunk {}/{}", pos.x(), pos.z()),
         }
     }
 }
 
-pub trait ChunkProvider {
-    fn get_chunk(&self, pos: &ChunkPos) -> anyhow::Result<&Chunk>;
-
+pub trait ChunkLoader {
+    fn get_chunk(&self, pos: &ChunkPos) -> Option<Chunk>;
 }
 
-pub enum ChunkStorageError {
-    
-}
+pub enum ChunkStorageError {}
 
 pub trait ChunkStorage {
     fn is_chunk_cached(&self, pos: &ChunkPos) -> bool;
