@@ -3,6 +3,7 @@ pub mod block;
 pub mod util;
 pub mod dimension;
 pub mod net;
+pub mod error;
 
 #[cfg(test)]
 mod test {

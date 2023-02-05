@@ -7,20 +7,16 @@ use once_cell::sync::Lazy;
 use proc_macros::count_ids;
 use tokio::io::AsyncWriteExt;
 
-use crate::{ util::pos::BlockPos, net::{ Packetable, PacketReadError }, wait };
+use crate::{
+    util::pos::BlockPos,
+    net::{ Packetable },
+    wait,
+    error::{ block::*, net::PacketReadError },
+};
 
 use super::simple::*;
 
 static mut CACHE: Lazy<MetroHashMap<u16, Block>> = Lazy::new(MetroHashMap::default);
-
-#[derive(Debug)]
-pub struct InvalidBlockIdError(pub u8);
-
-impl From<InvalidBlockIdError> for anyhow::Error {
-    fn from(value: InvalidBlockIdError) -> Self {
-        anyhow!("Invalid Block Id: {}", value.0)
-    }
-}
 
 #[count_ids]
 #[derive(Debug, Clone)]

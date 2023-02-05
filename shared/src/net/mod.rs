@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     util::pos::{ BlockPos, ChunkPos },
     block::{ state::{ Block } },
-    dimension::chunk::Chunk,
+    dimension::chunk::Chunk, error::net::PacketReadError,
 };
 pub trait Packetable {
     fn write_to_buffer<T: AsyncWrite + Unpin>(
@@ -19,27 +19,6 @@ pub trait Packetable {
     fn read_from_bytes(reader: &mut BigEndianReader) -> anyhow::Result<Self> where Self: Sized;
 }
 
-pub enum PacketReadError {
-    InvalidPacketType(u16),
-    NotEnoughData(u32, u32),
-    IOError(io::Error),
-}
-
-impl From<PacketReadError> for anyhow::Error {
-    fn from(value: PacketReadError) -> Self {
-        match value {
-            PacketReadError::NotEnoughData(actual, minimum) =>
-                anyhow!(
-                    "Packet data too small! Read {} bits while at least {} were needed",
-                    actual,
-                    minimum
-                ),
-            PacketReadError::IOError(inner) => inner.into(),
-            PacketReadError::InvalidPacketType(id) =>
-                anyhow!("There is no Packet type with ID {}!", id),
-        }
-    }
-}
 
 #[repr(u16)]
 #[derive(Debug, Clone)]

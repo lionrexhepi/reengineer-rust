@@ -3,7 +3,7 @@ use bitter::{ BigEndianReader, BitReader };
 use metrohash::MetroHashMap;
 use tokio::io::BufReader;
 
-use crate::{ util::pos::{ ChunkPos, BlockPos }, block::state::{ Block }, net::Packetable };
+use crate::{ util::pos::{ ChunkPos, BlockPos }, block::state::{ Block }, net::Packetable, error::dimension::{InvalidSubChunkDataError, InvalidChunkDataError} };
 
 #[derive(Debug, Clone)]
 pub struct SubChunk {
@@ -11,17 +11,6 @@ pub struct SubChunk {
     y_base: u8,
 }
 
-pub struct InvalidSubChunkDataError(pub usize);
-
-impl From<InvalidSubChunkDataError> for anyhow::Error {
-    fn from(value: InvalidSubChunkDataError) -> Self {
-        anyhow!(
-            "Chunk data has invalid length. A chunk needs to be exactly {} bytes, while this one is only {} bytes.",
-            SubChunk::BYTES,
-            value.0
-        )
-    }
-}
 
 impl SubChunk {
     pub const DIMENSIONS: usize = 16;
@@ -74,27 +63,6 @@ impl Packetable for SubChunk {
     }
 }
 
-pub enum InvalidChunkDataError {
-    InvalidHeaderSize(usize),
-    InvalidDataSize(usize, usize),
-}
-
-impl From<InvalidChunkDataError> for anyhow::Error {
-    fn from(value: InvalidChunkDataError) -> Self {
-        match value {
-            InvalidChunkDataError::InvalidHeaderSize(size) =>
-                anyhow!("Found {}-bit subchunk count instead of the expected 5 bits ", 0),
-            InvalidChunkDataError::InvalidDataSize(actual, expected) =>
-                anyhow!(
-                    "The chunk data is {} bits, or {} bytes large, but it needs to be {} bits / {} bytes",
-                    actual,
-                    actual / 8,
-                    expected,
-                    expected / 8
-                ),
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
@@ -159,19 +127,7 @@ impl Packetable for Chunk {
     }
 }
 
-#[derive(Debug)]
-pub enum ChunkProviderError {
-    ChunkGenerationFailedError(ChunkPos),
-}
 
-impl From<ChunkProviderError> for anyhow::Error {
-    fn from(value: ChunkProviderError) -> Self {
-        match value {
-            ChunkProviderError::ChunkGenerationFailedError(pos) =>
-                anyhow!("Couldn't generate chunk {}/{}", pos.x(), pos.z()),
-        }
-    }
-}
 
 pub trait ChunkLoader {
     fn get_chunk(&self, pos: &ChunkPos) -> Option<Chunk>;
