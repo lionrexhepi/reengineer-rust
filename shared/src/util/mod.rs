@@ -2,7 +2,6 @@
 
 pub mod pos;
 pub mod direction;
-pub mod movement;
 
 pub mod logger;
 
