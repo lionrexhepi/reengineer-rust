@@ -1,5 +1,7 @@
 use anyhow::anyhow;
 
+use crate::util::pos::BlockPos;
+
 pub enum PositionDeserializeError {
     BlockPos(u32),
     ChunkPos(u32),
