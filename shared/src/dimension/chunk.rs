@@ -1,16 +1,19 @@
-use anyhow::{ anyhow, ensure };
+use anyhow::{ ensure };
 use bitter::{ BigEndianReader, BitReader };
 use metrohash::MetroHashMap;
-use tokio::io::BufReader;
 
-use crate::{ util::pos::{ ChunkPos, BlockPos }, block::state::{ Block }, net::Packetable, error::dimension::{InvalidSubChunkDataError, InvalidChunkDataError} };
+use crate::{
+    util::pos::{ ChunkPos, BlockPos },
+    block::state::{ Block },
+    error::dimension::{ InvalidSubChunkDataError, InvalidChunkDataError },
+};
+use crate::cbs::Packetable;
 
 #[derive(Debug, Clone)]
 pub struct SubChunk {
     data: [u16; Self::BLOCK_COUNT],
     y_base: u8,
 }
-
 
 impl SubChunk {
     pub const DIMENSIONS: usize = 16;
@@ -50,18 +53,6 @@ impl SubChunk {
     }
 }
 
-impl Packetable for SubChunk {
-    fn write_to_buffer<T: tokio::io::AsyncWrite + Unpin>(
-        self,
-        buffer: &mut tokio::io::BufWriter<T>
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    fn read_from_bytes(reader: &mut BigEndianReader) -> anyhow::Result<Self> where Self: Sized {
-        todo!()
-    }
-}
 
 
 #[derive(Debug, Clone)]
@@ -94,7 +85,7 @@ impl Packetable for Chunk {
         todo!()
     }
 
-    fn read_from_bytes(reader: &mut BigEndianReader) -> anyhow::Result<Self> where Self: Sized {
+    fn read_from_buf(reader: &mut BigEndianReader) -> anyhow::Result<Self> where Self: Sized {
         let len = reader.refill_lookahead();
 
         ensure!(len > 5, InvalidChunkDataError::InvalidHeaderSize(len as usize));
@@ -127,13 +118,9 @@ impl Packetable for Chunk {
     }
 }
 
-
-
 pub trait ChunkLoader {
     fn get_chunk(&self, pos: &ChunkPos) -> Option<Chunk>;
 }
-
-
 
 pub trait ChunkStorage {
     fn is_chunk_cached(&self, pos: &ChunkPos) -> bool;

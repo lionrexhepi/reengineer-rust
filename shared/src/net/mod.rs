@@ -1,24 +1,16 @@
 use std::{ fmt::Debug };
 
-use anyhow::{ Ok, anyhow, bail, ensure };
+use anyhow::{ Ok, bail, ensure };
 use bitter::{ BigEndianReader, BitReader };
-use tokio::{ io::{ BufWriter, AsyncWriteExt }, io::{ AsyncWrite, self } };
+use tokio::{ io::{ BufWriter, AsyncWriteExt }, io::{ AsyncWrite } };
 use uuid::Uuid;
 
 use crate::{
     util::pos::{ BlockPos, ChunkPos },
     block::{ state::{ Block } },
-    dimension::chunk::Chunk, error::net::PacketReadError,
+    dimension::chunk::Chunk,
+    error::net::PacketReadError,
 };
-pub trait Packetable {
-    fn write_to_buffer<T: AsyncWrite + Unpin>(
-        self,
-        buffer: &mut BufWriter<T>
-    ) -> anyhow::Result<()>;
-
-    fn read_from_bytes(reader: &mut BigEndianReader) -> anyhow::Result<Self> where Self: Sized;
-}
-
 
 #[repr(u16)]
 #[derive(Debug, Clone)]

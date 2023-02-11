@@ -4,6 +4,7 @@ pub mod util;
 pub mod dimension;
 pub mod net;
 pub mod error;
+pub mod cbs;
 
 #[cfg(test)]
 mod test {

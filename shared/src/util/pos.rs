@@ -1,14 +1,16 @@
-use std::{ ops::Range, error::Error };
+use std::{ ops::Range };
 
 use bitter::BitReader;
 use glam::{ IVec3, Vec3 };
 use tokio::io::AsyncWriteExt;
 
-use anyhow::{ ensure, anyhow };
+use anyhow::{ ensure };
 
-use crate::{ net::Packetable, wait, error::util::{PositionDeserializeError, InvalidPositionError} };
-
-
+use crate::{
+    cbs::Packetable,
+    wait,
+    error::util::{ PositionDeserializeError, InvalidPositionError },
+};
 
 #[derive(Debug, Clone)]
 pub struct ChunkPos {
@@ -53,7 +55,7 @@ impl Packetable for ChunkPos {
         Ok(())
     }
 
-    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
+    fn read_from_buf(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
         let len = reader.refill_lookahead();
         ensure!(len >= 48, PositionDeserializeError::ChunkPos(len));
         let x = reader.peek(24) as i32;
@@ -62,7 +64,6 @@ impl Packetable for ChunkPos {
         Ok(Self { x, z })
     }
 }
-
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct BlockPos {
@@ -224,7 +225,7 @@ impl Packetable for BlockPos {
         Ok(())
     }
 
-    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
+    fn read_from_buf(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
         let len = reader.refill_lookahead();
         ensure!(len >= 64, PositionDeserializeError::BlockPos(len));
         let long = reader.peek(64);

@@ -1,17 +1,18 @@
-use std::{ fmt::Debug, collections::hash_map::Entry };
+use std::{ fmt::Debug };
 
-use anyhow::{ anyhow, ensure };
+use anyhow::{ ensure };
 use bitter::BitReader;
 use metrohash::MetroHashMap;
 use once_cell::sync::Lazy;
 use proc_macros::count_ids;
+use serde::{Serialize, Deserialize, de::Visitor};
 use tokio::io::AsyncWriteExt;
 
 use crate::{
     util::pos::BlockPos,
-    net::{ Packetable },
     wait,
     error::{ block::*, net::PacketReadError },
+    cbs::Packetable,
 };
 
 use super::simple::*;
@@ -24,6 +25,8 @@ pub enum Block {
     Air(AirState),
     Grass(GrassState),
 }
+
+unsafe impl Send for Block {}
 
 fn get_cache() -> &'static mut Lazy<MetroHashMap<u16, Block>> {
     unsafe {
@@ -55,24 +58,6 @@ impl BlockHandler for Block {
     }
 }
 
-impl Packetable for &Block {
-    fn write_to_buffer<T: tokio::io::AsyncWrite + Unpin>(
-        self,
-        buffer: &mut tokio::io::BufWriter<T>
-    ) -> anyhow::Result<()> {
-        wait!(buffer.write_u16(self.to_id()))?;
-        Ok(())
-    }
-
-    fn read_from_bytes(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
-        let len = reader.refill_lookahead();
-        ensure!(len >= 16, PacketReadError::NotEnoughData(len, 16));
-        let id = reader.peek(16) as u16;
-        reader.consume(16);
-        Block::from_id(id)
-    }
-}
-
 pub trait BlockHandler {
     fn is_replaceable(&self, _pos: BlockPos) -> bool {
         false
@@ -92,3 +77,4 @@ pub trait State: Debug + Clone {
     }
     const DEFAULT: Self;
 }
+
