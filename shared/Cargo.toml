@@ -8,6 +8,7 @@ anyhow = "1.0.68"
 async-trait = "0.1.64"
 bitter = "0.6.1"
 chrono = "0.4.23"
+client = { version = "0.1.0", path = "../client" }
 futures = "0.3.26"
 glam = "0.22.0"
 log = "0.4.17"
@@ -17,5 +18,6 @@ once_cell = "1.17.0"
 proc_macros = { path = "../proc_macros" }
 serde = "1.0.152"
 serde_derive = "1.0.152"
+server = { version = "0.1.0", path = "../server" }
 tokio = { version = "1.24.2",  features = ["full"]}
 uuid = "1.2.2"

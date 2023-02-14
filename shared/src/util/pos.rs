@@ -37,33 +37,7 @@ impl ChunkPos {
     }
 }
 
-impl Packetable for ChunkPos {
-    fn write_to_buffer<T: tokio::io::AsyncWrite + Unpin>(
-        self,
-        buffer: &mut tokio::io::BufWriter<T>
-    ) -> anyhow::Result<()> {
-        wait!(
-            buffer.write(
-                &[((self.x >> 16) & 255) as u8, ((self.x >> 8) & 255) as u8, (self.x & 255) as u8]
-            ) // only the first 23 bits are actually used, so we write 3 bytes(24 bits) per coordinate
-        )?;
-        wait!(
-            buffer.write(
-                &[((self.z >> 16) & 255) as u8, ((self.z >> 8) & 255) as u8, (self.z & 255) as u8]
-            )
-        )?;
-        Ok(())
-    }
 
-    fn read_from_buf(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
-        let len = reader.refill_lookahead();
-        ensure!(len >= 48, PositionDeserializeError::ChunkPos(len));
-        let x = reader.peek(24) as i32;
-        let z = reader.peek(24) as i32;
-        reader.consume(48);
-        Ok(Self { x, z })
-    }
-}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct BlockPos {
@@ -216,20 +190,3 @@ impl From<BlockPos> for Vec3 {
     }
 }
 
-impl Packetable for BlockPos {
-    fn write_to_buffer<T: tokio::io::AsyncWrite + Unpin>(
-        self,
-        buffer: &mut tokio::io::BufWriter<T>
-    ) -> anyhow::Result<()> {
-        wait!(buffer.write_u64(self.as_long()))?;
-        Ok(())
-    }
-
-    fn read_from_buf(reader: &mut bitter::BigEndianReader) -> anyhow::Result<Self> {
-        let len = reader.refill_lookahead();
-        ensure!(len >= 64, PositionDeserializeError::BlockPos(len));
-        let long = reader.peek(64);
-        reader.consume(64);
-        Ok(Self::from_long(long))
-    }
-}

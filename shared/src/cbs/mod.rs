@@ -1,8 +1,9 @@
 pub mod block;
 pub mod chunk;
+pub mod pos;
 
 use core::panic;
-use std::{ sync::Arc, io::Write };
+use std::{ sync::Arc, io::Write, any };
 
 use anyhow::ensure;
 use async_trait::async_trait;
@@ -14,7 +15,7 @@ use bitter::BitReader;
 use std::io::BufWriter;
 use crate::error::cbs::CbsBufferError;
 
-#[async_trait]
+
 pub trait Packetable {
     fn write_to_buffer<T: Write + Unpin + Send>(
         self,
@@ -112,20 +113,60 @@ impl<'a> PacketBuf<'a> {
         Ok(result)
     }
 
-    pub fn next_bits<const BITS: usize>(&mut self) -> anyhow::Result<u128> {
-        let bytes = BITS >> 3;
-        assert!(
-            BITS < 128 && BITS % 8 == 0,
-            "You can only read bit sequences which are <128 and multiples of 8! This is an unrecoverable error."
-        );
+    fn next_n_bytes_as_u32<const BYTES: usize>(&mut self) -> anyhow::Result<u32> {
 
-        ensure!(
-            self.index + bytes < self.index,
-            CbsBufferError::NotEnoughData(bytes, self.available_bytes())
-        );
+        let mut temp = [0u8; 4];
 
-        let result = unsafe { *(self.data.as_ptr() as *const u128) & ((1 << bytes) - 1) };
-        self.consume_bytes(bytes);
-        Ok(result)
+        temp.copy_from_slice(self.next_bytes::<BYTES>()?);
+
+        Ok(u32::from_le_bytes(temp))
     }
 }
+
+pub trait WriteExt: Write {
+    fn write_u8(&mut self, val: u8) -> anyhow::Result<usize> {
+        Ok(self.write(&[val])?)
+    }
+
+    fn write_u16(&mut self, val: u16) -> anyhow::Result<usize> {
+        let buf = [0u8; 2];
+
+        unsafe {
+            *(buf.as_mut_ptr() as *mut u16) = val;
+        }
+
+        Ok(self.write(&buf)?)
+    }
+
+    fn write_u32(&mut self, val: u32) -> anyhow::Result<usize> {
+        let buf = [0u8; 4];
+
+        unsafe {
+            *(buf.as_mut_ptr() as *mut u32) = val;
+        }
+
+        Ok(self.write(&buf)?)
+    }
+
+    fn write_u64(&mut self, val: u64) -> anyhow::Result<usize> {
+        let buf = [0u8; 8];
+
+        unsafe {
+            *(buf.as_mut_ptr() as *mut u64) = val;
+        }
+
+        Ok(self.write(&buf)?)
+    }
+
+    fn first_n_bytes_u128<const BYTES: usize>(&mut self, int: u128) -> anyhow::Result<usize> {
+        assert!(BYTES <= 16);
+        Ok(self.write(&int.to_le_bytes()[0..BYTES])?)
+    }
+
+    fn first_n_bytes_u32<const BYTES: usize>(&mut self, int: u32) -> anyhow::Result<usize> {
+        assert!(BYTES <= 4);
+        Ok(self.write(&int.to_le_bytes()[0..BYTES])?)
+    }
+}
+
+impl<T> WriteExt for T where T: Write {}

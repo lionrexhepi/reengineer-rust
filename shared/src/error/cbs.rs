@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 
 pub enum CbsBufferError {
-    NotEnoughData(u32, usize)
+    NotEnoughData(usize, usize)
 }
 
 impl From<CbsBufferError> for anyhow::Error {
