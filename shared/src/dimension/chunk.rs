@@ -4,7 +4,7 @@ use metrohash::MetroHashMap;
 
 use crate::{
     util::pos::{ ChunkPos, BlockPos },
-    block::state::{ Block },
+    block::state::{ Block, BlockId },
     error::dimension::{ InvalidSubChunkDataError, InvalidChunkDataError },
 };
 use crate::cbs::Packetable;
@@ -24,15 +24,10 @@ impl SubChunk {
         }
     }
 
-
-
-
-    pub fn get_block(&self, x: i16, y: i16, z: i16) -> anyhow::Result<&Block> {
-        Block::from_id(self.data[((y << 8) | (z << 4) | x) as usize])
+    pub fn get_block(&self, x: i16, y: i16, z: i16) -> BlockId {
+        BlockId(self.data[((y << 8) | (z << 4) | x) as usize])
     }
 }
-
-
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
@@ -44,19 +39,17 @@ impl Chunk {
         Chunk { non_air_sub_chunks: MetroHashMap::default() }
     }
 
-    pub fn get_block(&self, pos: BlockPos) -> anyhow::Result<&Block> {
+    pub fn get_block(&self, pos: BlockPos) -> anyhow::Result<BlockId> {
         let y = pos.y();
-        pos.validate()?;
+        let _ =pos.validate()?;
 
         Ok(match self.non_air_sub_chunks.get(&((y << 4) as u8)) {
             Some(sc) =>
-                sc.get_block((pos.x() & 15) as i16, (y & 15) as i16, (pos.z() & 15) as i16)?,
-            None => <&Block>::default(),
+                sc.get_block((pos.x() & 15) as i16, (y & 15) as i16, (pos.z() & 15) as i16),
+            None => BlockId::default(),
         })
     }
 }
-
-
 
 pub trait ChunkLoader {
     fn get_chunk(&self, pos: &ChunkPos) -> Option<Chunk>;

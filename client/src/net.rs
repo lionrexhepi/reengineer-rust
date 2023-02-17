@@ -1,14 +1,13 @@
 use core::{ panic };
+use std::{ sync::mpsc::channel, net::{ TcpStream, Incoming }, io::{ Read, ErrorKind } };
 
 use log::error;
-use shared::net::{ PacketData, Packet, PacketDirection, NetworkHandler };
-use tokio::{
-    spawn,
-    sync::mpsc::{ unbounded_channel, UnboundedSender, UnboundedReceiver },
-    task::JoinHandle,
-    net::{ TcpStream },
-    io::{ AsyncReadExt, BufWriter, AsyncWriteExt },
+use shared::{
+    net::{ PacketData, Packet, PacketDirection, NetworkHandler, PacketType },
+    cbs::PacketBuf,
+    util::Boxable,
 };
+
 pub struct ClientNetworkHandler {
     outgoing_sender: UnboundedSender<Packet>,
     incoming_receiver: UnboundedReceiver<Packet>,
@@ -16,49 +15,80 @@ pub struct ClientNetworkHandler {
 }
 
 impl ClientNetworkHandler {
-    pub async fn for_server(address: &str) -> Self {
-        let (send_out, mut receive_out) = unbounded_channel::<Packet>();
-        let (send_in, receive_in) = unbounded_channel();
+    fn try_read_packet(stream: &TcpStream) -> anyhow::Result<Option<Packet>> {
+        let mut incoming_type = [0u8; 3];
 
-        let mut stream = TcpStream::connect(address).await.unwrap();
+        match stream.read_exact(&mut incoming_type) {
+            Ok(_) => Ok(None),
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                wait_for_fd();
+                stream.set_nonblocking(false);
 
-        let handle_thread = spawn(async move {
-            'main_loop: loop {
-                let mut buffer = Vec::new();
-                if let Err(e) = stream.read_to_end(&mut buffer).await {
-                    error!("Error loading Packet data: {}", e);
+                let packet_type = u16::from_le_bytes(incoming_type) as PacketType;
+                let size = None;
+
+                if packet_type.size_can_vary() {
+                    let packet_size_buf = [0u8; 1];
+
+                    stream.read_exact(buf)?;
+
+                    size = Some(packet_size_buf[0]);
                 }
-                let packet_data = PacketData::from_bytes(&buffer);
 
-                match packet_data {
-                    Ok(packet_data) => {
-                        let packet = Packet {
-                            data: packet_data,
-                            direction: PacketDirection::FromServer,
-                        };
+                let size = packet_type.get_required_buffer_size(size);
 
-                        if send_in.send(packet).is_err() {
-                            break 'main_loop;
-                        }
+                let mut data_buffer = vec![0u8; size];
+
+                stream.read_exact(&mut data_buffer[0..])?;
+
+                let buffer = PacketBuf::new(data_buffer.into_boxed_slice());
+
+                let data = packet_type.read_data(&mut buffer);
+
+                stream.set_nonblocking(true);
+
+                Ok(Some(Packet { direction: PacketDirection::FromServer, packet_type, data }))
+            }
+            Err(e) => {
+                bail!(e);
+            }
+        }
+    }
+
+    pub fn for_server(address: &str) -> Self {
+        let (send_out, mut receive_out) = channel::<Packet>();
+        let (send_in, receive_in) = channel();
+
+        let mut stream = TcpStream::connect(address).unwrap();
+        stream.set_nonblocking(true).unwrap();
+
+        let handle_thread = spawn(move || {
+            'main_loop: loop {
+                if let Some(packet) = Self::try_read_packet(&stream)? {
+                    if send_in.send(packet).is_err() {
+                        break 'main_loop;
+                    }
+                }
+
+                let mut writer = BufWriter::new(&mut stream);
+                while let Ok(packet) = receive_out.try_recv() {
+                    if let PacketDirection::ToServer = packet.direction {
+                    } else {
+                        error!(
+                            "Packet with invalid direction '{:?}': {:?}",
+                            packet.direction,
+                            packet
+                        );
+                        panic!("Packet has invalid direction : {:?}", packet.direction);
                     }
 
-                    Err(e) => error!("Failed to parse Packet: {}", e),
-                }
-            }
-            let mut writer = BufWriter::new(&mut stream);
-            while let Ok(packet) = receive_out.try_recv() {
-                if let PacketDirection::ToServer = packet.direction {
-                } else {
-                    error!("Packet with invalid direction '{:?}': {:?}", packet.direction, packet);
-                    panic!("Packet has invalid direction : {:?}", packet.direction);
+                    if let Err(e) = packet.data.write_to_buffer(&mut writer).await {
+                        error!("Failed to serialize packet: {}", e);
+                    }
                 }
 
-                if let Err(e) = packet.data.write_to_buffer(&mut writer).await {
-                    error!("Failed to serialize packet: {}", e);
-                }
+                writer.flush().unwrap();
             }
-
-            writer.flush().await.unwrap();
         });
 
         Self {
@@ -69,17 +99,16 @@ impl ClientNetworkHandler {
     }
 }
 
-
 pub struct FakeNetworkHandler {
     outgoing: UnboundedSender<Packet>,
-    incoming: UnboundedReceiver<Packet>
+    incoming: UnboundedReceiver<Packet>,
 }
 
 impl NetworkHandler for FakeNetworkHandler {
     fn enqueue_packet(&self, packet: Packet) -> anyhow::Result<()> {
         match self.outgoing.send(packet) {
-            Ok(_)=> Ok(()),
-            Err(e)=> Err(e.into())
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -91,9 +120,7 @@ impl NetworkHandler for FakeNetworkHandler {
         result
     }
 
-    fn close_all(self) {
-       
-    }
+    fn close_all(self) {}
 }
 
 impl FakeNetworkHandler {
@@ -102,8 +129,8 @@ impl FakeNetworkHandler {
         let (to_server, from_client) = unbounded_channel();
 
         (
-            Self { incoming: from_server, outgoing: to_server},
-            Self { incoming: from_client, outgoing: to_client}
+            Self { incoming: from_server, outgoing: to_server },
+            Self { incoming: from_client, outgoing: to_client },
         )
     }
 }

@@ -23,7 +23,8 @@ pub enum Block {
 
 unsafe impl Send for Block {}
 
-pub struct BlockId(pub(crate) u16);
+#[derive(Default, Debug, Clone, Copy)]
+pub struct BlockId(pub u16);
 
 impl BlockId {
     pub fn resolve(&self) -> anyhow::Result<&'static Block> {

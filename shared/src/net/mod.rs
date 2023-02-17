@@ -1,77 +1,94 @@
-use std::{ fmt::Debug };
+use std::{ fmt::Debug, io::{ Write, BufWriter } };
 
 use anyhow::{ Ok, bail, ensure };
 use bitter::{ BigEndianReader, BitReader };
-use tokio::{ io::{ BufWriter, AsyncWriteExt }, io::{ AsyncWrite } };
 use uuid::Uuid;
 
 use crate::{
     util::pos::{ BlockPos, ChunkPos },
-    block::{ state::{ Block } },
+    block::{ state::{ Block, BlockId } },
     dimension::chunk::Chunk,
     error::net::PacketReadError,
+    cbs::{ Packetable, WriteExt, FixedSizePacketable, DynamicSizePacketable, PacketBuf },
 };
 
-#[repr(u16)]
 #[derive(Debug, Clone)]
 pub enum PacketData {
     Ping,
-    BlockUpdate(BlockPos, &'static Block),
+    BlockUpdate(BlockPos, BlockId),
     ChunkData(ChunkPos, Chunk),
 }
 
-impl PacketData {
-    fn discriminant(&self) -> u16 {
-        unsafe { *<*const _>::from(self).cast::<u16>() }
+#[repr(u16)]
+#[derive(Debug, Clone)]
+pub enum PacketType {
+    Ping,
+    BlockUpdate,
+    ChunkData,
+}
+
+impl PacketType {
+    pub fn get_required_buffer_size(&self, size_header: Option<u8>) -> usize {
+        match self {
+            PacketType::Ping => 1,
+            PacketType::BlockUpdate => BlockPos::SIZE_IN_BYTES + BlockId::SIZE_IN_BYTES,
+            PacketType::ChunkData =>
+                ChunkPos::SIZE_IN_BYTES +
+                    Chunk::size_in_bytes(size_header.expect("This should never happen.")),
+        }
     }
 
-    pub async fn write_to_buffer<T: AsyncWrite + Unpin>(
+    pub fn size_can_vary(&self) -> bool {
+        match self {
+            Self::ChunkData => true,
+            _ => false,
+        }
+    }
+
+    pub fn read_data(&self, buf: &mut PacketBuf) -> anyhow::Result<PacketData> {
+        match self {
+            PacketType::Ping => {
+                buf.next_byte();
+                Ok(PacketData::Ping)
+            }
+            PacketType::BlockUpdate =>
+                Ok(
+                    PacketData::BlockUpdate(
+                        BlockPos::read_from_buf(buf)?,
+                        BlockId::read_from_buf(buf)?
+                    )
+                ),
+            PacketType::ChunkData =>
+                Ok(
+                    PacketData::ChunkData(
+                        ChunkPos::read_from_buf( buf)?,
+                        Chunk::read_from_buf(buf)?
+                    )
+                ),
+        }
+    }
+}
+
+impl PacketData {
+    pub fn write_to_buffer<T: Write + Unpin + Send>(
         self,
         buffer: &mut BufWriter<T>
     ) -> anyhow::Result<()> {
-        buffer.write_u16(self.discriminant()).await?;
-
         match self {
-            PacketData::Ping => buffer.write_u8(1).await?,
+            PacketData::Ping => {
+                buffer.write_u8(1)?;
+            }
             PacketData::BlockUpdate(pos, block) => {
                 pos.write_to_buffer(buffer)?;
                 block.write_to_buffer(buffer)?;
             }
-            PacketData::ChunkData(pos, _chunk) => {
-                buffer.write_u64(pos.as_long()).await?; //TODO: write the chunk too
+            PacketData::ChunkData(pos, chunk) => {
+                pos.write_to_buffer(buffer)?;
+                chunk.write_to_buffer(buffer)?;
             }
         }
 
         Ok(())
-    }
-
-    pub fn from_bytes(data: &[u8]) -> anyhow::Result<Self> {
-        let mut reader = BigEndianReader::new(data);
-
-        let len = reader.refill_lookahead();
-        ensure!(len >= 16, PacketReadError::NotEnoughData(len, 16));
-
-        let id = reader.peek(16) as u16;
-        reader.consume(16);
-
-        match id {
-            0 => {
-                let len = reader.refill_lookahead();
-                ensure!(len >= 8, PacketReadError::NotEnoughData(len, 8));
-                reader.consume(8);
-                Ok(Self::Ping)
-            }
-            1 => {
-                Ok(
-                    Self::BlockUpdate(
-                        BlockPos::read_from_bytes(&mut reader)?,
-                        <&Block>::read_from_bytes(&mut reader)?
-                    )
-                )
-            }
-
-            _ => bail!(PacketReadError::InvalidPacketType(id)),
-        }
     }
 }
 
@@ -95,6 +112,7 @@ impl ClientId {
 #[derive(Debug, Clone)]
 pub struct Packet {
     pub direction: PacketDirection,
+    pub packet_type: PacketType,
     pub data: PacketData,
 }
 

@@ -15,7 +15,6 @@ use bitter::BitReader;
 use std::io::BufWriter;
 use crate::error::cbs::CbsBufferError;
 
-
 pub trait Packetable {
     fn write_to_buffer<T: Write + Unpin + Send>(
         self,
@@ -25,20 +24,32 @@ pub trait Packetable {
     fn read_from_buf(reader: &mut PacketBuf) -> anyhow::Result<Self> where Self: Sized;
 }
 
-pub struct PacketBuf<'a> {
+pub trait FixedSizePacketable: Packetable {
+    const SIZE_IN_BYTES: usize;
+    const SIZE_IN_UNITS: u8 = 1;
+}
+
+pub trait DynamicSizePacketable: Packetable {
+    fn size_in_bytes(units: u8) -> usize;
+    fn size_in_units(&self) -> u8;
+    fn current_size_in_bytes(&self) -> usize {
+        Self::size_in_bytes(self.size_in_units())
+    }
+}
+
+pub struct PacketBuf {
     data: Box<[u8]>,
     index: usize,
     total_bytes: usize,
-    reader: BigEndianReader<'a>,
 }
 
-impl<'a> PacketBuf<'a> {
+impl PacketBuf {
     pub fn new(data: Box<[u8]>) -> Self {
+        let len = data.len();
         Self {
             data,
             index: 0,
-            total_bytes: data.len(),
-            reader: BigEndianReader::new(&data),
+            total_bytes: len,
         }
     }
 
@@ -51,9 +62,9 @@ impl<'a> PacketBuf<'a> {
             self.index + BYTES <= self.total_bytes,
             CbsBufferError::NotEnoughData(BYTES, self.available_bytes())
         );
+        self.consume_bytes(BYTES);
 
         let result = &self.data[self.index..self.index + BYTES];
-        self.consume_bytes(BYTES);
         Ok(&result)
     }
 
@@ -114,7 +125,6 @@ impl<'a> PacketBuf<'a> {
     }
 
     fn next_n_bytes_as_u32<const BYTES: usize>(&mut self) -> anyhow::Result<u32> {
-
         let mut temp = [0u8; 4];
 
         temp.copy_from_slice(self.next_bytes::<BYTES>()?);
@@ -129,7 +139,7 @@ pub trait WriteExt: Write {
     }
 
     fn write_u16(&mut self, val: u16) -> anyhow::Result<usize> {
-        let buf = [0u8; 2];
+        let mut buf = [0u8; 2];
 
         unsafe {
             *(buf.as_mut_ptr() as *mut u16) = val;
@@ -139,7 +149,7 @@ pub trait WriteExt: Write {
     }
 
     fn write_u32(&mut self, val: u32) -> anyhow::Result<usize> {
-        let buf = [0u8; 4];
+        let mut buf = [0u8; 4];
 
         unsafe {
             *(buf.as_mut_ptr() as *mut u32) = val;
@@ -149,7 +159,7 @@ pub trait WriteExt: Write {
     }
 
     fn write_u64(&mut self, val: u64) -> anyhow::Result<usize> {
-        let buf = [0u8; 8];
+        let mut buf = [0u8; 8];
 
         unsafe {
             *(buf.as_mut_ptr() as *mut u64) = val;
