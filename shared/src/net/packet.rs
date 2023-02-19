@@ -30,6 +30,22 @@ pub enum PacketDirection {
     ToServer,
 }
 
+
+#[derive(Debug, Clone)]
+pub enum PacketSource {
+    Server,
+    Client(ClientId)
+}
+
+impl PacketSource {
+    pub fn as_direction(self) -> PacketDirection {
+        match self {
+            PacketSource::Server => PacketDirection::FromServer,
+            PacketSource::Client(id) => PacketDirection::FromClient(id),
+        }
+    }
+}
+
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct ClientId(Uuid);
 
@@ -53,7 +69,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn try_from_stream(stream: &mut TcpStream) -> anyhow::Result<Option<Packet>> {
+    pub fn try_from_stream(stream: &mut TcpStream, source: PacketSource) -> anyhow::Result<Option<Packet>> {
         let mut incoming_type = [0u8; 2];
 
         match stream.read_exact(&mut incoming_type) {
@@ -82,7 +98,7 @@ impl Packet {
 
                 let data = PacketData::read_data(packet_type, &mut buffer)?;
 
-                Ok(Some(Packet { direction: PacketDirection::FromServer, packet_type, data }))
+                Ok(Some(Packet { direction: source.as_direction(), packet_type, data }))
             }
             Err(ref e) if e.kind() == ErrorKind::WouldBlock => { Ok(None) /*No bytes received*/ }
             Err(e) => { Err(anyhow!(e)) }

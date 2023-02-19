@@ -6,7 +6,7 @@ use std::{
 };
 
 use log::error;
-use shared::net::{ packet::{ Packet }, NetworkHandler };
+use shared::net::{ packet::{ Packet, PacketSource }, NetworkHandler };
 
 pub struct ClientNetworkHandler {
     outgoing_sender: Sender<Packet>,
@@ -16,7 +16,7 @@ pub struct ClientNetworkHandler {
 
 impl ClientNetworkHandler {
     fn handle_incoming(stream: &mut TcpStream, send: &Sender<Packet>) -> anyhow::Result<()> {
-        while let Some(packet) = Packet::try_from_stream(stream)? {
+        while let Some(packet) = Packet::try_from_stream(stream, PacketSource::Server)? {
             send.send(packet)?;
         }
 
