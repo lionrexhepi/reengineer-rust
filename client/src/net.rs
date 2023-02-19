@@ -1,93 +1,52 @@
-use core::{ panic };
-use std::{ sync::mpsc::channel, net::{ TcpStream, Incoming }, io::{ Read, ErrorKind } };
-
-use log::error;
-use shared::{
-    net::{ PacketData, Packet, PacketDirection, NetworkHandler, PacketType },
-    cbs::PacketBuf,
-    util::Boxable,
+use std::{
+    sync::mpsc::{ channel, Sender, Receiver },
+    net::{ TcpStream },
+    io::{ BufWriter, Write },
+    thread::{ JoinHandle, spawn },
 };
 
+use log::error;
+use shared::net::{ packet::{ Packet }, NetworkHandler };
+
 pub struct ClientNetworkHandler {
-    outgoing_sender: UnboundedSender<Packet>,
-    incoming_receiver: UnboundedReceiver<Packet>,
+    outgoing_sender: Sender<Packet>,
+    incoming_receiver: Receiver<Packet>,
     server_thread: JoinHandle<()>,
 }
 
 impl ClientNetworkHandler {
-    fn try_read_packet(stream: &TcpStream) -> anyhow::Result<Option<Packet>> {
-        let mut incoming_type = [0u8; 3];
-
-        match stream.read_exact(&mut incoming_type) {
-            Ok(_) => Ok(None),
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                wait_for_fd();
-                stream.set_nonblocking(false);
-
-                let packet_type = u16::from_le_bytes(incoming_type) as PacketType;
-                let size = None;
-
-                if packet_type.size_can_vary() {
-                    let packet_size_buf = [0u8; 1];
-
-                    stream.read_exact(buf)?;
-
-                    size = Some(packet_size_buf[0]);
-                }
-
-                let size = packet_type.get_required_buffer_size(size);
-
-                let mut data_buffer = vec![0u8; size];
-
-                stream.read_exact(&mut data_buffer[0..])?;
-
-                let buffer = PacketBuf::new(data_buffer.into_boxed_slice());
-
-                let data = packet_type.read_data(&mut buffer);
-
-                stream.set_nonblocking(true);
-
-                Ok(Some(Packet { direction: PacketDirection::FromServer, packet_type, data }))
-            }
-            Err(e) => {
-                bail!(e);
-            }
+    fn handle_incoming(stream: &mut TcpStream, send: &Sender<Packet>) -> anyhow::Result<()> {
+        while let Some(packet) = Packet::try_from_stream(stream)? {
+            send.send(packet)?;
         }
+
+        Ok(())
+    }
+
+    fn handle_outgoing(stream: &mut TcpStream, receive: &Receiver<Packet>) -> anyhow::Result<()> {
+        let mut writer = BufWriter::new(stream);
+        while let Ok(packet) = receive.try_recv() {
+            packet.write_to_buffer(&mut writer)?;
+        }
+        writer.flush()?;
+
+        Ok(())
     }
 
     pub fn for_server(address: &str) -> Self {
-        let (send_out, mut receive_out) = channel::<Packet>();
+        let (send_out, receive_out) = channel::<Packet>();
         let (send_in, receive_in) = channel();
 
         let mut stream = TcpStream::connect(address).unwrap();
         stream.set_nonblocking(true).unwrap();
 
         let handle_thread = spawn(move || {
-            'main_loop: loop {
-                if let Some(packet) = Self::try_read_packet(&stream)? {
-                    if send_in.send(packet).is_err() {
-                        break 'main_loop;
-                    }
+            loop {
+                if let Err(error) = Self::handle_incoming(&mut stream, &send_in) {
+                    error!("Failed to receive incoming Packet(s): {}", error);
+                } else if let Err(error) = Self::handle_outgoing(&mut stream, &receive_out) {
+                    error!("Failed to dispatch outgoing Packet(s): {}", error);
                 }
-
-                let mut writer = BufWriter::new(&mut stream);
-                while let Ok(packet) = receive_out.try_recv() {
-                    if let PacketDirection::ToServer = packet.direction {
-                    } else {
-                        error!(
-                            "Packet with invalid direction '{:?}': {:?}",
-                            packet.direction,
-                            packet
-                        );
-                        panic!("Packet has invalid direction : {:?}", packet.direction);
-                    }
-
-                    if let Err(e) = packet.data.write_to_buffer(&mut writer).await {
-                        error!("Failed to serialize packet: {}", e);
-                    }
-                }
-
-                writer.flush().unwrap();
             }
         });
 
@@ -100,8 +59,8 @@ impl ClientNetworkHandler {
 }
 
 pub struct FakeNetworkHandler {
-    outgoing: UnboundedSender<Packet>,
-    incoming: UnboundedReceiver<Packet>,
+    outgoing: Sender<Packet>,
+    incoming: Receiver<Packet>,
 }
 
 impl NetworkHandler for FakeNetworkHandler {
@@ -125,8 +84,8 @@ impl NetworkHandler for FakeNetworkHandler {
 
 impl FakeNetworkHandler {
     pub fn new_pair() -> (Self, Self) {
-        let (to_client, from_server) = unbounded_channel();
-        let (to_server, from_client) = unbounded_channel();
+        let (to_client, from_server) = channel();
+        let (to_server, from_client) = channel();
 
         (
             Self { incoming: from_server, outgoing: to_server },

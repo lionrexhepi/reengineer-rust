@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use metrohash::MetroHashMap;
 use once_cell::sync::Lazy;
 pub use shared::dimension::chunk::*;
-use shared::util::pos::ChunkPos;
+use shared::{util::chunk_pos::ChunkPos, dimension::storage::ChunkStorage};
 use tokio::sync::mpsc::{ UnboundedSender };
 
 pub struct ClientWorldStorage {
