@@ -1,15 +1,13 @@
 use std::{ ops::Range };
 
-use bitter::BitReader;
+
 use glam::{ IVec3, Vec3 };
-use tokio::io::AsyncWriteExt;
 
 use anyhow::{ ensure };
 
 use crate::{
     cbs::{Packetable, PacketBuf, FixedSizePacketable, WriteExt},
-    wait,
-    error::util::{ PositionDeserializeError, InvalidPositionError },
+    error::util::{ InvalidPositionError },
 };
 
 use super::chunk_pos::ChunkPos;
@@ -173,7 +171,7 @@ impl Packetable for BlockPos {
         self,
         buffer: &mut std::io::BufWriter<T>
     ) -> anyhow::Result<()> {
-        buffer.write_u64(self.as_long());
+        buffer.write_u64(self.as_long())?;
         Ok(())
     }
 

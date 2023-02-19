@@ -12,14 +12,18 @@ impl SubChunk {
     pub const DIMENSIONS: usize = 16;
     pub const BLOCK_COUNT: usize = Self::DIMENSIONS * Self::DIMENSIONS * Self::DIMENSIONS;
     pub const BYTES: usize = Self::BLOCK_COUNT * 2;
-    pub fn new() -> SubChunk {
-        SubChunk {
-            data: [0u16; Self::BLOCK_COUNT],
-        }
-    }
+    
 
     pub fn get_block(&self, x: i16, y: i16, z: i16) -> BlockId {
         BlockId(self.data[((y << 8) | (z << 4) | x) as usize])
+    }
+}
+
+impl Default for SubChunk {
+    fn default() -> SubChunk {
+        SubChunk {
+            data: [0u16; Self::BLOCK_COUNT],
+        }
     }
 }
 

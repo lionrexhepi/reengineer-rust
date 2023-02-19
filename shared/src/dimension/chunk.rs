@@ -1,13 +1,12 @@
 use std::io::Write;
 
-use anyhow::{ ensure };
-use bitter::{ BigEndianReader, BitReader };
+
+
 use metrohash::MetroHashMap;
 
 use crate::{
     util::block_pos::{  BlockPos },
-    block::{ Block, BlockId },
-    error::dimension::{ InvalidSubChunkDataError, InvalidChunkDataError }, cbs::{PacketBuf, DynamicSizePacketable, WriteExt},
+    block::{ BlockId }, cbs::{PacketBuf, DynamicSizePacketable, WriteExt},
 };
 use crate::cbs::Packetable;
 
@@ -26,7 +25,7 @@ impl Chunk {
 
     pub fn get_block(&self, pos: BlockPos) -> anyhow::Result<BlockId> {
         let y = pos.y();
-        let _ =pos.validate()?;
+        pos.validate()?;
 
         Ok(match self.non_air_sub_chunks.get(&((y << 4) as u8)) {
             Some(sc) =>

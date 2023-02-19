@@ -35,7 +35,7 @@ pub enum InvalidChunkDataError {
 impl From<InvalidChunkDataError> for anyhow::Error {
     fn from(value: InvalidChunkDataError) -> Self {
         match value {
-            InvalidChunkDataError::InvalidHeaderSize(size) =>
+            InvalidChunkDataError::InvalidHeaderSize(_size) =>
                 anyhow!("Found {}-bit subchunk count instead of the expected 5 bits ", 0),
             InvalidChunkDataError::InvalidDataSize(actual, expected) =>
                 anyhow!(

@@ -1,14 +1,9 @@
 use std::io::ErrorKind;
 use std::io::Read;
 
-use crate::cbs::DynamicSizePacketable;
-use crate::cbs::FixedSizePacketable;
-use crate::cbs::Packetable;
 use crate::cbs::WriteExt;
 use crate::error::net::PacketReadError;
 
-use num_derive::FromPrimitive;
-use num_derive::ToPrimitive;
 use num_traits::FromPrimitive;
 use num_traits::ToPrimitive;
 
@@ -22,21 +17,10 @@ use std::io::Write;
 
 use anyhow::{ anyhow, Ok };
 
-
 use crate::cbs::PacketBuf;
-
-use crate::dimension::chunk::Chunk;
-
-
-use crate::block::BlockId;
-
-use crate::util::block_pos::BlockPos;
 
 use super::packet_data::PacketData;
 use super::packet_data::PacketType;
-
-
-
 
 #[derive(Debug, Clone)]
 pub enum PacketDirection {
@@ -49,9 +33,15 @@ pub enum PacketDirection {
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct ClientId(Uuid);
 
+impl Default for ClientId {
+     fn default() -> Self {
+        Self(Uuid::nil())
+    }
+}
+
 impl ClientId {
-    pub fn new() -> Self {
-        Self(Uuid::new_v4())
+    pub fn new() -> ClientId {
+        ClientId(Uuid::new_v4())
     }
 }
 
@@ -63,7 +53,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub(crate) fn try_from_stream(stream: &mut TcpStream) -> anyhow::Result<Option<Packet>> {
+    pub fn try_from_stream(stream: &mut TcpStream) -> anyhow::Result<Option<Packet>> {
         let mut incoming_type = [0u8; 2];
 
         match stream.read_exact(&mut incoming_type) {
@@ -90,7 +80,7 @@ impl Packet {
 
                 let mut buffer = PacketBuf::new(data_buffer.into_boxed_slice());
 
-                let data = PacketData::read_data(packet_type,&mut buffer)?;
+                let data = PacketData::read_data(packet_type, &mut buffer)?;
 
                 Ok(Some(Packet { direction: PacketDirection::FromServer, packet_type, data }))
             }
@@ -99,7 +89,7 @@ impl Packet {
         }
     }
 
-    fn write_to_buffer<T: Write + Unpin + Send>(
+    pub fn write_to_buffer<T: Write + Unpin + Send>(
         self,
         buffer: &mut BufWriter<T>
     ) -> anyhow::Result<()> {
@@ -114,4 +104,3 @@ impl Packet {
         Ok(())
     }
 }
-

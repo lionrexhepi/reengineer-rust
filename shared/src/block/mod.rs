@@ -7,8 +7,7 @@ use proc_macros::count_ids;
 
 use crate::{
     util::block_pos::BlockPos,
-    wait,
-    error::{ block::*, net::PacketReadError },
+    error::{ block::* },
     cbs::{ Packetable, FixedSizePacketable, PacketBuf, WriteExt },
 };
 
@@ -83,9 +82,9 @@ impl BlockId {
     pub fn resolve(&self) -> anyhow::Result<&'static Block> {
         let map = cache::get_cache();
 
-        if !map.contains_key(&self.0) {
-            map.insert(self.0, Block::from_ints((self.0 >> 8) as u8, (self.0 & 255) as u8)?);
-        }
+        if let std::collections::hash_map::Entry::Vacant(e) = map.entry(self.0) {
+            e.insert(Block::from_ints((self.0 >> 8) as u8, (self.0 & 255) as u8)?);
+        };
 
         Ok(
             map

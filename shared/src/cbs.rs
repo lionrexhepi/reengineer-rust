@@ -1,13 +1,13 @@
-use core::panic;
-use std::{ sync::Arc, io::Write, any };
+
+use std::{ io::Write };
 
 use anyhow::ensure;
-use async_trait::async_trait;
-use bitter::BigEndianReader;
+
+
 
 use anyhow;
 
-use bitter::BitReader;
+
 use std::io::BufWriter;
 use crate::error::cbs::CbsBufferError;
 
@@ -50,10 +50,10 @@ impl PacketBuf {
     }
 
     fn consume_bytes(&mut self, bytes: usize) {
-        self.index = self.index + bytes;
+        self.index += bytes;
     }
 
-    pub fn next_bytes<'b, const BYTES: usize>(&'b mut self) -> anyhow::Result<&'b [u8]> {
+    pub fn next_bytes<const BYTES: usize>(& mut self) -> anyhow::Result<& [u8]> {
         ensure!(
             self.index + BYTES <= self.total_bytes,
             CbsBufferError::NotEnoughData(BYTES, self.available_bytes())
@@ -61,7 +61,7 @@ impl PacketBuf {
         self.consume_bytes(BYTES);
 
         let result = &self.data[self.index..self.index + BYTES];
-        Ok(&result)
+        Ok(result)
     }
 
     pub fn available_bytes(&self) -> usize {
