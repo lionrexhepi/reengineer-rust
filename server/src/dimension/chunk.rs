@@ -3,7 +3,10 @@ use std::{ path::Path, collections::hash_map::Entry };
 use log::error;
 use metrohash::MetroHashMap;
 use once_cell::sync::Lazy;
-use shared::{ dimension::chunk::*, util::pos::ChunkPos };
+use shared::{
+    dimension::{ chunk::*, storage::{ ChunkStorage, ChunkLoader } },
+    util::{ chunk_pos::ChunkPos },
+};
 
 pub struct DiskChunkLoader {
     save_folder: Box<Path>,
@@ -16,7 +19,7 @@ impl DiskChunkLoader {
 }
 
 impl ChunkLoader for DiskChunkLoader {
-    fn get_chunk(&self, _pos: &shared::util::pos::ChunkPos) -> Option<Chunk> {
+    fn get_chunk(&self, _pos: &ChunkPos) -> Option<Chunk> {
         None
     }
 }
