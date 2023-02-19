@@ -1,104 +1,118 @@
-use core::panic;
+use std::{
+    sync::mpsc::{ Sender, Receiver, channel, TrySendError },
+    thread::{ spawn },
+    net::{ TcpListener, TcpStream },
+    io::BufWriter,
+};
 
+use anyhow::{ bail, anyhow };
 use log::error;
 use metrohash::MetroHashMap;
-use shared::net::{ PacketData, Packet, NetworkHandler, ClientId, PacketDirection };
-use tokio::{
-    spawn,
-    sync::mpsc::{ unbounded_channel, UnboundedSender, UnboundedReceiver },
-    task::JoinHandle,
-    net::{ TcpListener },
-    io::{ AsyncReadExt, AsyncWriteExt, BufWriter },
+use shared::net::{
+    packet::{ Packet, ClientId, PacketSource, PacketDirection },
+    NetworkHandler,
 };
 
 pub struct ServerNetworkHandler {
-    outgoing_sender: UnboundedSender<Packet>,
-    incoming_receiver: UnboundedReceiver<Packet>,
-    server_thread: JoinHandle<()>,
+    outgoing_sender: Sender<Packet>,
+    incoming_receiver: Receiver<Packet>,
+    terminate: Sender<()>,
 }
 
 impl ServerNetworkHandler {
-    pub async fn init() -> Self {
-        let (send_out, mut receive_out) = unbounded_channel::<Packet>();
-        let (send_in, receive_in) = unbounded_channel();
+    fn receive_client_packets(
+        client: &ClientId,
+        stream: &mut TcpStream,
+        send: &Sender<Packet>
+    ) -> anyhow::Result<()> {
+        while
+            let Some(packet) = Packet::try_from_stream(
+                stream,
+                PacketSource::Client(client.clone())
+            )?
+        {
+            send.send(packet)?;
+        }
 
-        let listener = TcpListener::bind("127.0.0.1:19354").await.unwrap();
+        Ok(())
+    }
 
-        let handle_thread = spawn(async move {
+    fn dispatch_packet(
+        packet: Packet,
+        clients: &MetroHashMap<ClientId, TcpStream>
+    ) -> anyhow::Result<()> {
+        let mut stream = if let PacketDirection::ToClient(id) = &packet.direction {
+            clients.get(id).ok_or_else(|| anyhow!("Client with id {:?} doesn't exist!", id))?
+        } else {
+            bail!(
+                "Invalid packet direction: {:?}, expected PacketDirection::ToClient(ClientId)",
+                packet.direction
+            )
+        };
+
+        let mut writer = BufWriter::new(&mut stream);
+
+        packet.write_to_buffer(&mut writer)?;
+
+        Ok(())
+    }
+
+    pub fn init() -> Self {
+        let (send_out, receive_out) = channel::<Packet>();
+        let (send_in, receive_in) = channel();
+        let (terminate_sender, terminate_receiver) = channel();
+
+        let listener = TcpListener::bind("127.0.0.1:19354").unwrap();
+
+        listener.set_nonblocking(true).unwrap();
+
+        let handle_thread = spawn(move || {
             let mut clients = MetroHashMap::default();
 
             'main_loop: loop {
-                let client = listener.accept().await;
+                if terminate_receiver.try_recv().is_ok() {
+                    break;
+                }
+
+                let client = listener.accept();
                 if let Ok((stream, _)) = client {
                     clients.insert(ClientId::new(), stream);
                 }
 
                 for (id, stream) in clients.iter_mut() {
-                    let mut buffer = Vec::new();
-                    if let Err(e) = stream.read_to_end(&mut buffer).await {
-                        error!("Error loading Packet data: {}", e);
-                    }
-                    let packet_data = PacketData::from_bytes(&buffer);
+                    if let Err(error) = Self::receive_client_packets(id, stream, &send_in) {
+                        error!("Failed to receive Packet(s) sent by client {:?}: {}", id, error);
 
-                    match packet_data {
-                        Ok(packet_data) => {
-                            let packet = Packet {
-                                data: packet_data,
-                                direction: PacketDirection::FromClient(id.clone()),
-                            };
-
-                            if send_in.send(packet).is_err() {
-                                break 'main_loop;
-                            }
+                        if error.is::<TrySendError<Packet>>() {
+                            break 'main_loop;
                         }
-
-                        Err(e) => error!("Failed to parse Packet: {}", e),
                     }
                 }
 
                 while let Ok(packet) = receive_out.try_recv() {
-                    let target = if let PacketDirection::ToClient(id) = packet.direction {
-                        id
-                    } else {
-                        error!(
-                            "Packet with invalid direction '{:?}': {:?}",
-                            packet.direction,
-                            packet
-                        );
-                        panic!("Packet has invalid direction : {:?}", packet.direction);
-                    };
-
-                    if let Some(stream) = clients.get_mut(&target) {
-                        let mut writer = BufWriter::new(&mut *stream);
-                        if let Err(e) = packet.data.write_to_buffer(&mut writer).await {
-                            error!("Failed to serialize packet: {}", e);
-                        }
-
-                        writer.flush().await.unwrap();
-                    } else {
-                        error!(
-                            "Client with ID {:?} not found. They might have disconnected already.",
-                            target
-                        );
+                    if let Err(error) = Self::dispatch_packet(packet, &clients) {
+                        error!("Failed to dispatch packet: {}", error)
                     }
                 }
+            }
+
+            for (_, stream) in clients.into_iter() {
+                stream.shutdown(std::net::Shutdown::Both).unwrap();
             }
         });
 
         Self {
-            server_thread: handle_thread,
             outgoing_sender: send_out,
             incoming_receiver: receive_in,
+            terminate: terminate_sender,
         }
     }
 }
 
 impl NetworkHandler for ServerNetworkHandler {
     fn enqueue_packet(&self, packet: Packet) -> anyhow::Result<()> {
-        match self.outgoing_sender.send(packet) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
-        }
+        self.outgoing_sender.send(packet)?;
+        Ok(())
     }
 
     fn retrieve_incoming(&mut self) -> Vec<Packet> {
@@ -112,6 +126,6 @@ impl NetworkHandler for ServerNetworkHandler {
     }
 
     fn close_all(self) {
-        self.server_thread.abort();
+        self.terminate.send(()).unwrap();
     }
 }
