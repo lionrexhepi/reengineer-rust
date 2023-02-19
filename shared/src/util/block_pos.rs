@@ -7,35 +7,13 @@ use tokio::io::AsyncWriteExt;
 use anyhow::{ ensure };
 
 use crate::{
-    cbs::Packetable,
+    cbs::{Packetable, PacketBuf, FixedSizePacketable, WriteExt},
     wait,
     error::util::{ PositionDeserializeError, InvalidPositionError },
 };
 
-#[derive(Debug, Clone)]
-pub struct ChunkPos {
-    x: i32,
-    z: i32,
-}
+use super::chunk_pos::ChunkPos;
 
-impl ChunkPos {
-    pub fn as_long(&self) -> u64 {
-        //mostly used as a hash map key
-        ((self.x as u64) << 32) | (self.z as u64)
-    }
-
-    pub fn new(x: i32, z: i32) -> Self {
-        Self { x, z }
-    }
-
-    pub fn x(&self) -> i32 {
-        self.x
-    }
-
-    pub fn z(&self) -> i32 {
-        self.z
-    }
-}
 
 
 
@@ -190,3 +168,26 @@ impl From<BlockPos> for Vec3 {
     }
 }
 
+impl Packetable for BlockPos {
+    fn write_to_buffer<T: std::io::Write + Unpin + Send>(
+        self,
+        buffer: &mut std::io::BufWriter<T>
+    ) -> anyhow::Result<()> {
+        buffer.write_u64(self.as_long());
+        Ok(())
+    }
+
+    fn read_from_buf(reader: &mut PacketBuf) -> anyhow::Result<Self>
+        where Self: Sized
+    {
+        let long = reader.next_u64()?;
+
+        Ok(Self::from_long(long))
+    }
+
+    
+}
+
+impl FixedSizePacketable for BlockPos {
+    const SIZE_IN_BYTES: usize = 8;
+}

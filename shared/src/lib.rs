@@ -8,7 +8,7 @@ pub mod cbs;
 
 #[cfg(test)]
 mod test {
-    use crate::util::{ pos::BlockPos };
+    use crate::util::{ block_pos::BlockPos };
 
     #[test]
     pub fn test_block_pos() {

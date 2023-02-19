@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 
-use crate::util::pos::BlockPos;
+use crate::util::block_pos::BlockPos;
 
 pub enum PositionDeserializeError {
     BlockPos(u32),

@@ -1,4 +1,4 @@
-use crate::{util::pos::ChunkPos, dimension::chunk::SubChunk};
+use crate::{util::chunk_pos::ChunkPos, dimension::subchunk::SubChunk};
 use anyhow::anyhow;
 
 #[derive(Debug)]

@@ -1,33 +1,18 @@
+use std::io::Write;
+
 use anyhow::{ ensure };
 use bitter::{ BigEndianReader, BitReader };
 use metrohash::MetroHashMap;
 
 use crate::{
-    util::pos::{ ChunkPos, BlockPos },
-    block::state::{ Block, BlockId },
-    error::dimension::{ InvalidSubChunkDataError, InvalidChunkDataError },
+    util::block_pos::{  BlockPos },
+    block::{ Block, BlockId },
+    error::dimension::{ InvalidSubChunkDataError, InvalidChunkDataError }, cbs::{PacketBuf, DynamicSizePacketable, WriteExt},
 };
 use crate::cbs::Packetable;
 
-#[derive(Debug, Clone)]
-pub struct SubChunk {
-    pub(crate) data: [u16; Self::BLOCK_COUNT],
-}
+use super::subchunk::SubChunk;
 
-impl SubChunk {
-    pub const DIMENSIONS: usize = 16;
-    pub const BLOCK_COUNT: usize = Self::DIMENSIONS * Self::DIMENSIONS * Self::DIMENSIONS;
-    pub const BYTES: usize = Self::BLOCK_COUNT * 2;
-    pub fn new() -> SubChunk {
-        SubChunk {
-            data: [0u16; Self::BLOCK_COUNT],
-        }
-    }
-
-    pub fn get_block(&self, x: i16, y: i16, z: i16) -> BlockId {
-        BlockId(self.data[((y << 8) | (z << 4) | x) as usize])
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
@@ -51,12 +36,56 @@ impl Chunk {
     }
 }
 
-pub trait ChunkLoader {
-    fn get_chunk(&self, pos: &ChunkPos) -> Option<Chunk>;
+impl Packetable for Chunk {
+    fn write_to_buffer<T: Write + Unpin + Send>(
+        self,
+        buffer: &mut std::io::BufWriter<T>
+    ) -> anyhow::Result<()> {
+        let mut available_subchunks = 0u16; //16 bit flags; the nth bit is a bool whether or not that subchunk is included or not
+
+        let mut subchunks: Vec<(u8, SubChunk)> = self.non_air_sub_chunks.into_iter().collect();
+
+        subchunks.sort_by_key(|kvp| kvp.0);
+
+        for (y, _) in &subchunks {
+            let y = *y << 4; // divide by 16 to get the actual subchunk height
+            available_subchunks |= 1 << y; //Set the Yth bit to true
+        }
+
+        buffer.write_u16(available_subchunks)?;
+
+        for (_, sc) in subchunks.into_iter() {
+            sc.write_to_buffer(buffer)?;
+        }
+        
+
+        Ok(())
+    }
+
+    fn read_from_buf(reader: &mut PacketBuf) -> anyhow::Result<Self> where Self: Sized {
+        let available_subchunks = reader.next_u16()?;
+
+        let mut map = MetroHashMap::default();
+
+        for i in 0..15 {
+            if (available_subchunks & (1 << i)) != 0 {
+                //Check each bit for being true
+                map.insert((i as u8) * 16, SubChunk::read_from_buf(reader)?);
+            }
+        }
+
+        Ok(Self { non_air_sub_chunks: map })
+    }
+
+
 }
 
-pub trait ChunkStorage {
-    fn is_chunk_cached(&self, pos: &ChunkPos) -> bool;
+impl DynamicSizePacketable for Chunk {
+    fn size_in_bytes(units: u8) -> usize {
+        2 + (units as usize) * SubChunk::BYTES
+    }
 
-    fn get_chunk(&mut self, pos: &ChunkPos) -> anyhow::Result<&Chunk>;
+    fn size_in_units(&self) -> u8 {
+        self.non_air_sub_chunks.len() as u8
+    }
 }

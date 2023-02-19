@@ -1,7 +1,3 @@
-pub mod block;
-pub mod chunk;
-pub mod pos;
-
 use core::panic;
 use std::{ sync::Arc, io::Write, any };
 
@@ -124,7 +120,7 @@ impl PacketBuf {
         Ok(result)
     }
 
-    fn next_n_bytes_as_u32<const BYTES: usize>(&mut self) -> anyhow::Result<u32> {
+    pub fn next_n_bytes_as_u32<const BYTES: usize>(&mut self) -> anyhow::Result<u32> {
         let mut temp = [0u8; 4];
 
         temp.copy_from_slice(self.next_bytes::<BYTES>()?);

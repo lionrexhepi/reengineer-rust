@@ -1,9 +1,10 @@
 use std::io::Write;
 
-pub mod pos;
+pub mod block_pos;
 pub mod direction;
 
 pub mod logger;
+pub mod chunk_pos;
 
 pub trait Boxable {
     fn boxed(self) -> Box<Self>;
